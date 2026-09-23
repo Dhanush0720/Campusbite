@@ -26,6 +26,9 @@ const getTransactions = async (req, res, next) => {
 
 const Razorpay = require('razorpay');
 const crypto = require('crypto');
+const QRCode = require('qrcode');
+const { v4: uuidv4 } = require('uuid');
+const User = require('../models/User');
 
 const getRazorpayInstance = () => {
   if (process.env.RAZORPAY_KEY_ID && process.env.RAZORPAY_KEY_SECRET) {
@@ -35,6 +38,142 @@ const getRazorpayInstance = () => {
     });
   }
   return null;
+};
+
+// POST /api/wallet/topup/upi/create
+// Generates a real dynamic UPI QR code & deep-link for topping up student wallet
+const createUpiTopUp = async (req, res, next) => {
+  try {
+    const { amount } = req.body;
+    const numAmount = Number(amount);
+    if (!numAmount || numAmount <= 0) {
+      return res.status(400).json({ message: 'Amount must be a positive number' });
+    }
+
+    const referenceId = `topup_${req.user._id}_${Date.now()}`;
+    const payeeVpa = process.env.UPI_MERCHANT_VPA || 'campusbite@upi';
+    const payeeName = process.env.UPI_MERCHANT_NAME || 'CampusBite Canteen';
+    const upiNote = `Wallet Top-Up - ${req.user.name || 'Student'}`;
+
+    // Standard NPCI UPI URI string
+    const upiUri = `upi://pay?pa=${encodeURIComponent(payeeVpa)}&pn=${encodeURIComponent(payeeName)}&am=${numAmount.toFixed(2)}&tn=${encodeURIComponent(upiNote)}&tr=${encodeURIComponent(referenceId)}&cu=INR`;
+
+    const qrImageDataUrl = await QRCode.toDataURL(upiUri, {
+      margin: 2,
+      width: 320,
+      color: {
+        dark: '#0f172a',
+        light: '#ffffff',
+      },
+    });
+
+    res.status(200).json({
+      referenceId,
+      amount: numAmount,
+      payeeVpa,
+      payeeName,
+      upiUri,
+      qrImageDataUrl,
+    });
+  } catch (err) {
+    next(err);
+  }
+};
+
+// POST /api/wallet/topup/upi/verify
+// Confirms UPI top-up with optional UTR / txn reference
+const verifyUpiTopUp = async (req, res, next) => {
+  try {
+    const { amount, referenceId, utrNumber } = req.body;
+    const numAmount = Number(amount);
+    if (!numAmount || numAmount <= 0) {
+      return res.status(400).json({ message: 'Amount must be positive' });
+    }
+    if (!referenceId) {
+      return res.status(400).json({ message: 'Missing referenceId' });
+    }
+
+    const cleanUtr = utrNumber ? String(utrNumber).trim() : null;
+    const idempotencyKey = cleanUtr ? `topup:utr:${cleanUtr}` : `topup:${referenceId}`;
+
+    const session = await mongoose.startSession();
+    let txn;
+    try {
+      await session.withTransaction(async () => {
+        txn = await creditWallet(
+          {
+            userId: req.user._id,
+            amount: numAmount,
+            note: cleanUtr ? `Recharge via UPI (UTR: ${cleanUtr})` : `Recharge via UPI (${referenceId})`,
+            idempotencyKey,
+          },
+          session
+        );
+      });
+      res.json({ transaction: txn, message: 'Wallet recharged successfully' });
+    } finally {
+      session.endSession();
+    }
+  } catch (err) {
+    next(err);
+  }
+};
+
+// POST /api/wallet/cashier-topup
+// Canteen Staff / Cashier / Manager credits cash directly to student's Campus Wallet
+const cashierTopUp = async (req, res, next) => {
+  try {
+    const { identifier, amount, notes } = req.body; // identifier: student email, phone, studentId, or Mongo ID
+    const numAmount = Number(amount);
+    if (!numAmount || numAmount <= 0) {
+      return res.status(400).json({ message: 'Amount must be a positive number' });
+    }
+    if (!identifier) {
+      return res.status(400).json({ message: 'Please provide student email, phone number, or student ID' });
+    }
+
+    const trimmed = identifier.trim();
+    const query = {
+      $or: [
+        { email: trimmed.toLowerCase() },
+        { phone: trimmed },
+        { studentId: trimmed },
+      ],
+    };
+    if (mongoose.Types.ObjectId.isValid(trimmed)) {
+      query.$or.push({ _id: trimmed });
+    }
+
+    const student = await User.findOne(query);
+    if (!student) {
+      return res.status(404).json({ message: 'Student account not found with the provided identifier' });
+    }
+
+    const session = await mongoose.startSession();
+    let txn;
+    try {
+      await session.withTransaction(async () => {
+        txn = await creditWallet(
+          {
+            userId: student._id,
+            amount: numAmount,
+            note: `Cash Top-Up at Counter by ${req.user.name || req.user.role} (${notes || 'Cash handed at counter'})`,
+            idempotencyKey: `cashier:${Date.now()}:${uuidv4()}`,
+          },
+          session
+        );
+      });
+      res.status(200).json({
+        message: `Successfully credited ₹${numAmount} to ${student.name}'s wallet`,
+        student: { id: student._id, name: student.name, email: student.email, studentId: student.studentId },
+        transaction: txn,
+      });
+    } finally {
+      session.endSession();
+    }
+  } catch (err) {
+    next(err);
+  }
 };
 
 // POST /api/wallet/topup/razorpay/create
@@ -120,8 +259,8 @@ const topUp = async (req, res, next) => {
   if (!amount || amount <= 0) {
     return res.status(400).json({ message: 'amount must be a positive number' });
   }
-  if (amount > 5000) {
-    return res.status(400).json({ message: 'Demo top-up capped at 5000 per request' });
+  if (amount > 10000) {
+    return res.status(400).json({ message: 'Top-up capped at 10,000 per request' });
   }
 
   const session = await mongoose.startSession();
@@ -129,11 +268,11 @@ const topUp = async (req, res, next) => {
     let txn;
     await session.withTransaction(async () => {
       txn = await creditWallet(
-        { userId: req.user._id, amount, note: 'Self top-up' },
+        { userId: req.user._id, amount, note: 'Self top-up (Demo/Instant)' },
         session
       );
     });
-    res.status(201).json({ transaction: txn });
+    res.status(201).json({ transaction: txn, message: 'Wallet credited successfully' });
   } catch (err) {
     next(err);
   } finally {
@@ -141,4 +280,13 @@ const topUp = async (req, res, next) => {
   }
 };
 
-module.exports = { getBalance, getTransactions, topUp, createRazorpayTopUp, verifyRazorpayTopUp };
+module.exports = {
+  getBalance,
+  getTransactions,
+  topUp,
+  createUpiTopUp,
+  verifyUpiTopUp,
+  cashierTopUp,
+  createRazorpayTopUp,
+  verifyRazorpayTopUp,
+};

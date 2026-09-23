@@ -8,6 +8,7 @@ const paymentSchema = new mongoose.Schema(
     amount: { type: Number, required: true },
     provider: { type: String, default: 'sandbox' },
     providerReference: { type: String, index: true }, // UPI txn ref / gateway id
+    utrNumber: { type: String }, // 12-digit UPI reference ID (UTR)
     idempotencyKey: { type: String, required: true, unique: true },
     status: {
       type: String,

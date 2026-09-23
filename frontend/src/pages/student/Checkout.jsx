@@ -141,11 +141,11 @@ const Checkout = () => {
                 UPI
               </div>
               <div>
-                <p className="font-bold text-neutral-900 text-sm">UPI / QR / Razorpay Gateway</p>
-                <p className="text-xs text-neutral-500">Google Pay, PhonePe, Paytm, or instant QR</p>
+                <p className="font-bold text-neutral-900 text-sm">Direct UPI / QR Code</p>
+                <p className="text-xs text-neutral-500">Google Pay, PhonePe, Paytm, BHIM, or scan QR</p>
               </div>
             </div>
-            <span className="text-xs font-semibold text-emerald-600 bg-emerald-50 px-2 py-0.5 rounded-full">Instant</span>
+            <span className="text-xs font-semibold text-emerald-600 bg-emerald-50 px-2 py-0.5 rounded-full">0% Fee</span>
           </label>
 
           {/* Campus Wallet */}
@@ -209,7 +209,7 @@ const Checkout = () => {
 
       <div className="mt-4 flex items-center justify-center gap-2 text-xs text-neutral-400">
         <ShieldCheck size={14} className="text-emerald-500" />
-        <span>256-bit encrypted • Razorpay verified gateway</span>
+        <span>Direct Bank Settlement • Campus Verified Checkout</span>
       </div>
     </div>
   );

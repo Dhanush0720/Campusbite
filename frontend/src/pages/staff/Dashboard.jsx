@@ -1,8 +1,9 @@
 import React, { useEffect, useState } from 'react';
 import { Link } from 'react-router-dom';
-import { QrCode, Clock, CheckCircle2 } from 'lucide-react';
+import { QrCode, Clock, CheckCircle2, Banknote } from 'lucide-react';
 import api from '../../api/axios';
 import { useSocket } from '../../context/SocketContext';
+import CashierRechargeModal from '../../components/CashierRechargeModal';
 
 const ACTIVE_STATUSES = ['CONFIRMED', 'PREPARING', 'READY'];
 
@@ -10,6 +11,7 @@ const StaffDashboard = () => {
   const { events } = useSocket();
   const [orders, setOrders] = useState([]);
   const [busyId, setBusyId] = useState(null);
+  const [showCashierModal, setShowCashierModal] = useState(false);
 
   const load = () => api.get('/orders').then(({ data }) => setOrders(data.orders.filter((o) => ACTIVE_STATUSES.includes(o.orderStatus))));
 
@@ -39,12 +41,26 @@ const StaffDashboard = () => {
 
   return (
     <div className="max-w-5xl mx-auto px-4 py-8">
-      <div className="flex items-center justify-between mb-6">
+      <div className="flex flex-col sm:flex-row sm:items-center justify-between gap-4 mb-6">
         <h1 className="text-2xl font-bold text-neutral-900">Staff Dashboard</h1>
-        <Link to="/staff/scanner" className="btn-primary flex items-center gap-2">
-          <QrCode size={16} /> Scan QR
-        </Link>
+        <div className="flex items-center gap-2.5">
+          <button
+            onClick={() => setShowCashierModal(true)}
+            className="btn-secondary flex items-center gap-1.5 text-sm py-2 px-3.5 border-emerald-300 text-emerald-800 bg-emerald-50/60 hover:bg-emerald-100/70"
+          >
+            <Banknote size={16} className="text-emerald-600" />
+            <span>Counter Cash Top-Up</span>
+          </button>
+          <Link to="/staff/scanner" className="btn-primary flex items-center gap-2">
+            <QrCode size={16} /> Scan QR
+          </Link>
+        </div>
       </div>
+
+      <CashierRechargeModal
+        isOpen={showCashierModal}
+        onClose={() => setShowCashierModal(false)}
+      />
 
       <div className="grid grid-cols-1 md:grid-cols-3 gap-4">
         {Object.entries(grouped).map(([status, list]) => (

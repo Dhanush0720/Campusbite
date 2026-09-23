@@ -1,12 +1,14 @@
 import React, { useEffect, useState } from 'react';
-import { TrendingUp, ShoppingBag, Clock, AlertTriangle } from 'lucide-react';
+import { TrendingUp, ShoppingBag, Clock, AlertTriangle, Banknote } from 'lucide-react';
 import { PieChart, Pie, Cell, ResponsiveContainer, Tooltip, BarChart, Bar, XAxis, YAxis } from 'recharts';
 import api from '../../api/axios';
+import CashierRechargeModal from '../../components/CashierRechargeModal';
 
 const COLORS = ['#f97316', '#fb923c', '#fdba74', '#ea580c'];
 
 const ManagerDashboard = () => {
   const [dash, setDash] = useState(null);
+  const [showCashierModal, setShowCashierModal] = useState(false);
 
   useEffect(() => {
     api.get('/manager/dashboard').then(({ data }) => setDash(data));
@@ -19,7 +21,21 @@ const ManagerDashboard = () => {
 
   return (
     <div className="max-w-6xl mx-auto px-4 py-8">
-      <h1 className="text-2xl font-bold text-neutral-900 mb-6">Manager Dashboard</h1>
+      <div className="flex flex-col sm:flex-row sm:items-center justify-between gap-4 mb-6">
+        <h1 className="text-2xl font-bold text-neutral-900">Manager Dashboard</h1>
+        <button
+          onClick={() => setShowCashierModal(true)}
+          className="btn-secondary flex items-center gap-1.5 text-sm py-2 px-3.5 border-emerald-300 text-emerald-800 bg-emerald-50/60 hover:bg-emerald-100/70"
+        >
+          <Banknote size={16} className="text-emerald-600" />
+          <span>Counter Cash Top-Up</span>
+        </button>
+      </div>
+
+      <CashierRechargeModal
+        isOpen={showCashierModal}
+        onClose={() => setShowCashierModal(false)}
+      />
 
       <div className="grid grid-cols-2 md:grid-cols-4 gap-4 mb-8">
         <div className="card p-4">

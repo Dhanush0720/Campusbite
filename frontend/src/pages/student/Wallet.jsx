@@ -1,5 +1,18 @@
 import React, { useEffect, useState } from 'react';
-import { Wallet as WalletIcon, ArrowUpRight, ArrowDownLeft, ShieldCheck, Zap, Sparkles, CheckCircle2 } from 'lucide-react';
+import {
+  Wallet as WalletIcon,
+  ArrowUpRight,
+  ArrowDownLeft,
+  ShieldCheck,
+  Zap,
+  Sparkles,
+  CheckCircle2,
+  QrCode,
+  Copy,
+  Check,
+  ExternalLink,
+  Smartphone,
+} from 'lucide-react';
 import api from '../../api/axios';
 import { useAuth } from '../../context/AuthContext';
 
@@ -14,6 +27,11 @@ const Wallet = () => {
   const [successMsg, setSuccessMsg] = useState('');
   const [error, setError] = useState('');
 
+  const [upiModal, setUpiModal] = useState(null); // { referenceId, amount, payeeVpa, payeeName, upiUri, qrImageDataUrl }
+  const [utrNumber, setUtrNumber] = useState('');
+  const [copied, setCopied] = useState(false);
+  const [verifyingUpi, setVerifyingUpi] = useState(false);
+
   const load = async () => {
     try {
       const [b, t] = await Promise.all([api.get('/wallet/balance'), api.get('/wallet/transactions')]);
@@ -26,7 +44,8 @@ const Wallet = () => {
 
   useEffect(() => { load(); }, []);
 
-  const handleTopUp = async (e) => {
+  // Initiate Dynamic UPI Top-Up
+  const handleUpiTopUp = async (e) => {
     if (e) e.preventDefault();
     const amountNum = Number(topUpAmount);
     if (!amountNum || amountNum <= 0) {
@@ -39,62 +58,63 @@ const Wallet = () => {
     setSuccessMsg('');
 
     try {
-      // 1. Ask backend to create a Razorpay topup order
-      const { data } = await api.post('/wallet/topup/razorpay/create', { amount: amountNum });
-
-      // Fallback: If Razorpay keys aren't configured yet, perform direct topup
-      if (data.isDemo || !data.razorpay) {
-        await api.post('/wallet/topup', { amount: amountNum });
-        setSuccessMsg(`₹${amountNum} added successfully to your Campus Wallet!`);
-        await load();
-        setBusy(false);
-        return;
-      }
-
-      // 2. Open official Razorpay Checkout Modal
-      const options = {
-        key: data.razorpay.key || import.meta.env.VITE_RAZORPAY_KEY_ID,
-        amount: data.razorpay.amount,
-        currency: data.razorpay.currency || 'INR',
-        name: 'CampusBite Wallet',
-        description: `Wallet Recharge: ₹${amountNum}`,
-        order_id: data.razorpay.orderId,
-        handler: async function (response) {
-          try {
-            await api.post('/wallet/topup/razorpay/verify', {
-              amount: amountNum,
-              razorpay_order_id: response.razorpay_order_id,
-              razorpay_payment_id: response.razorpay_payment_id,
-              razorpay_signature: response.razorpay_signature,
-            });
-            setSuccessMsg(`🎉 ₹${amountNum} credited to your Campus Wallet!`);
-            await load();
-          } catch (err) {
-            setError(err.response?.data?.message || 'Top-up verification failed');
-          } finally {
-            setBusy(false);
-          }
-        },
-        prefill: {
-          name: user?.name,
-          email: user?.email,
-          contact: user?.phone,
-        },
-        modal: {
-          ondismiss: () => setBusy(false),
-        },
-        theme: { color: '#EA580C' },
-      };
-
-      const rzp = new window.Razorpay(options);
-      rzp.on('payment.failed', function (res) {
-        setError(res.error?.description || 'Payment failed');
-        setBusy(false);
-      });
-      rzp.open();
+      const { data } = await api.post('/wallet/topup/upi/create', { amount: amountNum });
+      setUpiModal(data);
+      setUtrNumber('');
     } catch (err) {
-      setError(err.response?.data?.message || 'Could not initiate top-up');
+      setError(err.response?.data?.message || 'Could not generate UPI QR code');
+    } finally {
       setBusy(false);
+    }
+  };
+
+  // Verify / Confirm UPI Top-Up
+  const handleVerifyUpiTopUp = async () => {
+    if (!upiModal) return;
+    setVerifyingUpi(true);
+    setError('');
+    try {
+      await api.post('/wallet/topup/upi/verify', {
+        amount: upiModal.amount,
+        referenceId: upiModal.referenceId,
+        utrNumber: utrNumber.trim() || undefined,
+      });
+      setSuccessMsg(`🎉 ₹${upiModal.amount} credited to your Campus Wallet!`);
+      setUpiModal(null);
+      await load();
+    } catch (err) {
+      setError(err.response?.data?.message || 'Top-up verification failed');
+    } finally {
+      setVerifyingUpi(false);
+    }
+  };
+
+  // Quick Demo / Instant Top-Up (for testing or instant credit)
+  const handleDemoTopUp = async () => {
+    const amountNum = Number(topUpAmount);
+    if (!amountNum || amountNum <= 0) {
+      setError('Please enter a valid amount');
+      return;
+    }
+    setBusy(true);
+    setError('');
+    setSuccessMsg('');
+    try {
+      await api.post('/wallet/topup', { amount: amountNum });
+      setSuccessMsg(`₹${amountNum} added directly to your Campus Wallet!`);
+      await load();
+    } catch (err) {
+      setError(err.response?.data?.message || 'Could not process top-up');
+    } finally {
+      setBusy(false);
+    }
+  };
+
+  const handleCopyVpa = () => {
+    if (upiModal?.payeeVpa) {
+      navigator.clipboard.writeText(upiModal.payeeVpa);
+      setCopied(true);
+      setTimeout(() => setCopied(false), 2000);
     }
   };
 
@@ -126,9 +146,14 @@ const Wallet = () => {
 
       {/* Top-up Form */}
       <div className="card p-5 mt-6 border border-neutral-200 shadow-sm">
-        <h2 className="font-semibold text-neutral-900 text-sm flex items-center gap-1.5 mb-3">
-          <Sparkles size={16} className="text-brand-600" /> Recharge Wallet
-        </h2>
+        <div className="flex items-center justify-between mb-3">
+          <h2 className="font-semibold text-neutral-900 text-sm flex items-center gap-1.5">
+            <Sparkles size={16} className="text-brand-600" /> Recharge Wallet
+          </h2>
+          <span className="text-[11px] font-semibold text-emerald-700 bg-emerald-50 border border-emerald-200 px-2 py-0.5 rounded-full">
+            0% Gateway Fees
+          </span>
+        </div>
 
         {/* Preset Chips */}
         <div className="grid grid-cols-4 gap-2 mb-3">
@@ -148,8 +173,8 @@ const Wallet = () => {
           ))}
         </div>
 
-        <form onSubmit={handleTopUp} className="flex flex-col sm:flex-row gap-2.5">
-          <div className="relative flex-1">
+        <form onSubmit={handleUpiTopUp} className="space-y-3">
+          <div className="relative">
             <span className="absolute left-3.5 top-3 text-neutral-400 font-bold text-sm">₹</span>
             <input
               type="number"
@@ -162,16 +187,35 @@ const Wallet = () => {
               onChange={(e) => setTopUpAmount(e.target.value)}
             />
           </div>
-          <button
-            type="submit"
-            disabled={busy}
-            className="btn-primary w-full sm:w-auto whitespace-nowrap text-sm py-3 sm:py-2.5 px-6 flex items-center justify-center gap-1.5 shadow-md"
-          >
-            <Zap size={15} />
-            {busy ? 'Opening…' : 'Add via UPI / Card'}
-          </button>
+
+          <div className="grid grid-cols-1 sm:grid-cols-2 gap-2.5">
+            <button
+              type="submit"
+              disabled={busy}
+              className="btn-primary w-full text-xs sm:text-sm py-2.5 px-4 flex items-center justify-center gap-1.5 shadow-md"
+            >
+              <QrCode size={15} />
+              {busy ? 'Generating QR…' : 'Pay via UPI QR'}
+            </button>
+            <button
+              type="button"
+              onClick={handleDemoTopUp}
+              disabled={busy}
+              className="btn-secondary w-full text-xs sm:text-sm py-2.5 px-4 flex items-center justify-center gap-1.5"
+            >
+              <Zap size={15} className="text-amber-500" />
+              Instant Top-Up (Demo)
+            </button>
+          </div>
         </form>
 
+        {/* Cash Notice */}
+        <div className="mt-4 p-3 bg-amber-50/70 border border-amber-200/80 rounded-xl text-xs text-amber-900 flex items-start gap-2">
+          <span className="text-base leading-none">💡</span>
+          <div>
+            <strong>Cash Recharge at Counter:</strong> You can also hand physical cash to the canteen cashier and have your Campus Wallet credited immediately!
+          </div>
+        </div>
 
         {successMsg && (
           <div className="mt-3 p-3 bg-emerald-50 text-emerald-800 text-xs rounded-lg flex items-center gap-2 border border-emerald-200">
@@ -182,6 +226,95 @@ const Wallet = () => {
 
         {error && <p className="text-red-600 text-xs mt-3 bg-red-50 p-2.5 rounded-lg">{error}</p>}
       </div>
+
+      {/* UPI Recharge Modal */}
+      {upiModal && (
+        <div className="fixed inset-0 z-50 bg-black/50 backdrop-blur-xs flex items-center justify-center p-4">
+          <div className="bg-white rounded-2xl max-w-sm w-full p-6 shadow-2xl border border-neutral-100 relative animate-in fade-in zoom-in duration-150">
+            <div className="text-center mb-4">
+              <h3 className="font-bold text-lg text-neutral-900">Recharge via UPI</h3>
+              <p className="text-xs text-neutral-500">Scan using any UPI app to credit your wallet</p>
+            </div>
+
+            <div className="bg-brand-50/60 border border-brand-100 rounded-xl p-3 text-center mb-4">
+              <span className="text-xs text-neutral-500">Amount:</span>
+              <p className="text-2xl font-black text-neutral-900">₹{upiModal.amount}</p>
+            </div>
+
+            {/* QR Image */}
+            <div className="p-3 bg-white border-2 border-neutral-200 rounded-2xl shadow-sm text-center mb-4">
+              <img
+                src={upiModal.qrImageDataUrl}
+                alt="UPI QR Code"
+                className="w-48 h-48 mx-auto object-contain rounded-lg"
+              />
+              <p className="text-[11px] text-neutral-400 mt-2">Scan with GPay, PhonePe, Paytm, or BHIM</p>
+            </div>
+
+            {/* Payee Info & Copy UPI ID */}
+            <div className="bg-neutral-50 border border-neutral-200/80 rounded-xl p-2.5 mb-3 flex items-center justify-between text-left">
+              <div className="truncate mr-2">
+                <p className="text-[10px] text-neutral-400 uppercase font-semibold">UPI ID</p>
+                <p className="font-mono text-xs font-bold text-neutral-800 truncate">{upiModal.payeeVpa}</p>
+              </div>
+              <button
+                type="button"
+                onClick={handleCopyVpa}
+                className="flex items-center gap-1 text-xs font-semibold px-2 py-1 rounded-md border border-neutral-200 bg-white hover:bg-neutral-100 text-neutral-700 shrink-0"
+              >
+                {copied ? <Check size={12} className="text-emerald-600" /> : <Copy size={12} />}
+                <span>{copied ? 'Copied' : 'Copy'}</span>
+              </button>
+            </div>
+
+            {/* Mobile App Link */}
+            {upiModal.upiUri && (
+              <a
+                href={upiModal.upiUri}
+                className="w-full flex items-center justify-center gap-1.5 py-2.5 px-3 rounded-xl font-bold text-xs bg-indigo-600 text-white mb-3 shadow-sm md:hidden"
+              >
+                <Smartphone size={15} />
+                <span>Open in UPI App</span>
+                <ExternalLink size={12} />
+              </a>
+            )}
+
+            {/* UTR Input */}
+            <div className="mb-4 text-left">
+              <label htmlFor="topupUtrInput" className="block text-[11px] font-semibold text-neutral-700 mb-1">
+                UPI Reference / UTR Number <span className="text-neutral-400 font-normal">(Optional)</span>
+              </label>
+              <input
+                id="topupUtrInput"
+                type="text"
+                value={utrNumber}
+                onChange={(e) => setUtrNumber(e.target.value)}
+                placeholder="12-digit UTR from payment receipt"
+                maxLength={18}
+                className="w-full px-3 py-1.5 border border-neutral-300 rounded-lg text-xs font-mono focus:outline-none focus:ring-1 focus:ring-brand-500"
+              />
+            </div>
+
+            <div className="flex gap-2">
+              <button
+                type="button"
+                onClick={() => setUpiModal(null)}
+                className="btn-secondary flex-1 py-2.5 text-xs font-semibold"
+              >
+                Cancel
+              </button>
+              <button
+                type="button"
+                onClick={handleVerifyUpiTopUp}
+                disabled={verifyingUpi}
+                className="btn-primary flex-1 py-2.5 text-xs font-bold"
+              >
+                {verifyingUpi ? 'Crediting…' : "I've Paid"}
+              </button>
+            </div>
+          </div>
+        </div>
+      )}
 
       {/* Transaction History */}
       <h2 className="font-semibold text-neutral-900 mt-8 mb-3 text-base">Recent Transactions</h2>

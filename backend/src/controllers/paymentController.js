@@ -7,6 +7,7 @@ const { finalizePaidOrder, emitOrderConfirmed } = require('../services/orderServ
 
 const Razorpay = require('razorpay');
 const crypto = require('crypto');
+const QRCode = require('qrcode');
 
 const getRazorpayInstance = () => {
   if (process.env.RAZORPAY_KEY_ID && process.env.RAZORPAY_KEY_SECRET) {
@@ -126,24 +127,44 @@ const createPayment = async (req, res, next) => {
         });
       }
 
-      // Otherwise fall back to Sandbox intent
+      // Fall back to Direct Dynamic UPI / Sandbox Intent
       const idempotencyKey = `order:${order._id}:upi:${uuidv4()}`;
       const payment = await Payment.create({
         orderId: order._id,
         userId: req.user ? req.user._id : undefined,
         method: 'UPI',
         amount: order.totalAmount,
-        provider: process.env.UPI_PROVIDER_NAME || 'sandbox',
+        provider: process.env.UPI_PROVIDER_NAME || 'direct-upi',
         providerReference: idempotencyKey,
         idempotencyKey,
         status: 'PENDING',
       });
 
+      const payeeVpa = process.env.UPI_MERCHANT_VPA || 'campusbite@upi';
+      const payeeName = process.env.UPI_MERCHANT_NAME || 'CampusBite Canteen';
+      const upiNote = `Order ${order.orderNumber}`;
+      
+      // Standard NPCI UPI URI string
+      const upiUri = `upi://pay?pa=${encodeURIComponent(payeeVpa)}&pn=${encodeURIComponent(payeeName)}&am=${order.totalAmount.toFixed(2)}&tn=${encodeURIComponent(upiNote)}&tr=${encodeURIComponent(payment.providerReference)}&cu=INR`;
+      
+      // Generate scannable QR Code Data URL on the fly
+      const qrImageDataUrl = await QRCode.toDataURL(upiUri, {
+        margin: 2,
+        width: 320,
+        color: {
+          dark: '#0f172a',
+          light: '#ffffff',
+        },
+      });
+
       const upiIntent = {
-        payeeVpa: process.env.UPI_MERCHANT_VPA || 'campusbite@sandbox',
+        payeeVpa,
+        payeeName,
         amount: order.totalAmount,
-        note: `CampusBite order ${order.orderNumber}`,
+        note: upiNote,
         reference: payment.providerReference,
+        upiUri,
+        qrImageDataUrl,
       };
 
       return res.status(201).json({ payment, upiIntent });
@@ -157,9 +178,9 @@ const createPayment = async (req, res, next) => {
 };
 
 // POST /api/payments/verify
-// body: { orderId, providerReference, razorpay_order_id, razorpay_payment_id, razorpay_signature }
+// body: { orderId, providerReference, utrNumber, razorpay_order_id, razorpay_payment_id, razorpay_signature }
 const verifyPayment = async (req, res, next) => {
-  const { orderId, providerReference, razorpay_order_id, razorpay_payment_id, razorpay_signature } = req.body;
+  const { orderId, providerReference, utrNumber, razorpay_order_id, razorpay_payment_id, razorpay_signature } = req.body;
 
   const order = await Order.findById(orderId);
   if (!order) return res.status(404).json({ message: 'Order not found' });
@@ -196,6 +217,9 @@ const verifyPayment = async (req, res, next) => {
       payment.verifiedAt = new Date();
       if (razorpay_payment_id) {
         payment.providerReference = razorpay_payment_id;
+      }
+      if (utrNumber) {
+        payment.utrNumber = String(utrNumber).trim();
       }
       await payment.save({ session });
 
