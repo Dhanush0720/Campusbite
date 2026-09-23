@@ -11,10 +11,58 @@ const Payment = () => {
   const base = isGuest ? '/guest' : '/student';
   const method = location.state?.method || 'UPI';
 
-  const [status, setStatus] = useState('creating'); // creating | awaiting-upi | verifying | done | error
+  const [status, setStatus] = useState('creating'); // creating | awaiting-upi | awaiting-razorpay | verifying | done | error
   const [upiIntent, setUpiIntent] = useState(null);
+  const [razorpayData, setRazorpayData] = useState(null);
   const [providerReference, setProviderReference] = useState(null);
   const [error, setError] = useState('');
+
+  const launchRazorpay = (rzpInfo) => {
+    if (!window.Razorpay) {
+      setError('Razorpay SDK failed to load. Please refresh the page.');
+      setStatus('error');
+      return;
+    }
+
+    const options = {
+      key: rzpInfo.key || import.meta.env.VITE_RAZORPAY_KEY_ID,
+      amount: rzpInfo.amount,
+      currency: rzpInfo.currency || 'INR',
+      name: 'CampusBite',
+      description: `Order #${orderId.slice(-6).toUpperCase()}`,
+      order_id: rzpInfo.orderId,
+      handler: async function (response) {
+        setStatus('verifying');
+        try {
+          const { data } = await api.post('/payments/verify', {
+            orderId,
+            providerReference: rzpInfo.orderId,
+            razorpay_order_id: response.razorpay_order_id,
+            razorpay_payment_id: response.razorpay_payment_id,
+            razorpay_signature: response.razorpay_signature,
+          });
+          sessionStorage.setItem(`qr:${orderId}`, JSON.stringify({ qrImage: data.qrImage, order: data.order }));
+          navigate(`${base}/qr/${orderId}`, { replace: true });
+        } catch (err) {
+          setError(err.response?.data?.message || 'Payment verification failed');
+          setStatus('error');
+        }
+      },
+      modal: {
+        ondismiss: function () {
+          setStatus('awaiting-razorpay');
+        },
+      },
+      theme: { color: '#EA580C' },
+    };
+
+    const rzpInstance = new window.Razorpay(options);
+    rzpInstance.on('payment.failed', function (response) {
+      setError(response.error?.description || 'Payment failed');
+      setStatus('awaiting-razorpay');
+    });
+    rzpInstance.open();
+  };
 
   useEffect(() => {
     const createPayment = async () => {
@@ -24,6 +72,11 @@ const Payment = () => {
           sessionStorage.setItem(`qr:${orderId}`, JSON.stringify({ qrImage: data.qrImage, order: data.order }));
           setStatus('done');
           navigate(`${base}/qr/${orderId}`, { replace: true });
+        } else if (data.razorpay) {
+          setRazorpayData(data.razorpay);
+          setProviderReference(data.payment.providerReference);
+          setStatus('awaiting-razorpay');
+          launchRazorpay(data.razorpay);
         } else {
           setUpiIntent(data.upiIntent);
           setProviderReference(data.payment.providerReference);
@@ -60,7 +113,34 @@ const Payment = () => {
   }
 
   if (status === 'error') {
-    return <div className="max-w-sm mx-auto px-4 py-16 text-center text-red-600">{error}</div>;
+    return (
+      <div className="max-w-sm mx-auto px-4 py-16 text-center">
+        <div className="text-red-600 mb-4">{error}</div>
+        <button onClick={() => navigate(-1)} className="btn-secondary text-sm">
+          Go Back
+        </button>
+      </div>
+    );
+  }
+
+  if (status === 'awaiting-razorpay') {
+    return (
+      <div className="max-w-sm mx-auto px-4 py-16 text-center">
+        <h1 className="text-xl font-bold text-neutral-900 mb-2">Complete Payment</h1>
+        <p className="text-neutral-500 text-sm mb-6">
+          Click the button below to open Razorpay and pay via UPI, Card, NetBanking, or Wallet.
+        </p>
+
+        {error && <div className="text-red-600 text-sm mb-4">{error}</div>}
+
+        <button
+          onClick={() => razorpayData && launchRazorpay(razorpayData)}
+          className="btn-primary w-full py-3"
+        >
+          Pay with Razorpay
+        </button>
+      </div>
+    );
   }
 
   return (

@@ -5,10 +5,21 @@ const Payment = require('../models/Payment');
 const { debitWallet } = require('../services/walletService');
 const { finalizePaidOrder, emitOrderConfirmed } = require('../services/orderService');
 
+const Razorpay = require('razorpay');
+const crypto = require('crypto');
+
+const getRazorpayInstance = () => {
+  if (process.env.RAZORPAY_KEY_ID && process.env.RAZORPAY_KEY_SECRET) {
+    return new Razorpay({
+      key_id: process.env.RAZORPAY_KEY_ID,
+      key_secret: process.env.RAZORPAY_KEY_SECRET,
+    });
+  }
+  return null;
+};
+
 // POST /api/payments/create
-// body: { orderId, method: 'UPI' | 'WALLET' }
-// WALLET is settled immediately (internal ledger, no external gateway needed).
-// UPI creates a PENDING payment + a sandbox "intent" the client displays; /verify finalizes it.
+// body: { orderId, method: 'UPI' | 'WALLET' | 'RAZORPAY' }
 const createPayment = async (req, res, next) => {
   const { orderId, method } = req.body;
 
@@ -80,8 +91,42 @@ const createPayment = async (req, res, next) => {
     return;
   }
 
-  if (method === 'UPI') {
+  if (method === 'UPI' || method === 'RAZORPAY') {
     try {
+      const rzp = getRazorpayInstance();
+
+      // If Razorpay keys are configured, create real Razorpay Order
+      if (rzp) {
+        const rzpOrder = await rzp.orders.create({
+          amount: Math.round(order.totalAmount * 100), // amount in paise
+          currency: 'INR',
+          receipt: `order_${order.orderNumber}`,
+          notes: { orderId: order._id.toString() },
+        });
+
+        const payment = await Payment.create({
+          orderId: order._id,
+          userId: req.user ? req.user._id : undefined,
+          method: 'UPI',
+          amount: order.totalAmount,
+          provider: 'razorpay',
+          providerReference: rzpOrder.id,
+          idempotencyKey: rzpOrder.id,
+          status: 'PENDING',
+        });
+
+        return res.status(201).json({
+          payment,
+          razorpay: {
+            orderId: rzpOrder.id,
+            amount: rzpOrder.amount,
+            currency: rzpOrder.currency,
+            key: process.env.RAZORPAY_KEY_ID,
+          },
+        });
+      }
+
+      // Otherwise fall back to Sandbox intent
       const idempotencyKey = `order:${order._id}:upi:${uuidv4()}`;
       const payment = await Payment.create({
         orderId: order._id,
@@ -94,7 +139,6 @@ const createPayment = async (req, res, next) => {
         status: 'PENDING',
       });
 
-      // Sandbox intent - swap for a real UPI gateway's payment-intent response in production.
       const upiIntent = {
         payeeVpa: process.env.UPI_MERCHANT_VPA || 'campusbite@sandbox',
         amount: order.totalAmount,
@@ -102,22 +146,20 @@ const createPayment = async (req, res, next) => {
         reference: payment.providerReference,
       };
 
-      res.status(201).json({ payment, upiIntent });
+      return res.status(201).json({ payment, upiIntent });
     } catch (err) {
       next(err);
     }
     return;
   }
 
-  res.status(400).json({ message: 'method must be UPI or WALLET' });
+  res.status(400).json({ message: 'method must be UPI, RAZORPAY, or WALLET' });
 };
 
 // POST /api/payments/verify
-// body: { orderId, providerReference }
-// In sandbox mode this simulates the gateway webhook telling us payment succeeded.
-// A real integration would verify a signature here instead of trusting the client.
+// body: { orderId, providerReference, razorpay_order_id, razorpay_payment_id, razorpay_signature }
 const verifyPayment = async (req, res, next) => {
-  const { orderId, providerReference } = req.body;
+  const { orderId, providerReference, razorpay_order_id, razorpay_payment_id, razorpay_signature } = req.body;
 
   const order = await Order.findById(orderId);
   if (!order) return res.status(404).json({ message: 'Order not found' });
@@ -125,9 +167,25 @@ const verifyPayment = async (req, res, next) => {
     return res.status(200).json({ message: 'Already verified', order });
   }
 
-  const payment = await Payment.findOne({ orderId: order._id, providerReference, status: 'PENDING' });
+  const lookupRef = providerReference || razorpay_order_id;
+  const payment = await Payment.findOne({ orderId: order._id, providerReference: lookupRef, status: 'PENDING' });
   if (!payment) {
     return res.status(404).json({ message: 'No pending payment found for this reference' });
+  }
+
+  // If Razorpay signature is sent, verify HMAC SHA-256
+  if (razorpay_signature) {
+    if (!process.env.RAZORPAY_KEY_SECRET) {
+      return res.status(500).json({ message: 'RAZORPAY_KEY_SECRET is not configured' });
+    }
+    const expectedSignature = crypto
+      .createHmac('sha256', process.env.RAZORPAY_KEY_SECRET)
+      .update(`${razorpay_order_id}|${razorpay_payment_id}`)
+      .digest('hex');
+
+    if (expectedSignature !== razorpay_signature) {
+      return res.status(400).json({ message: 'Invalid payment signature from Razorpay' });
+    }
   }
 
   const session = await mongoose.startSession();
@@ -136,6 +194,9 @@ const verifyPayment = async (req, res, next) => {
     await session.withTransaction(async () => {
       payment.status = 'SUCCESS';
       payment.verifiedAt = new Date();
+      if (razorpay_payment_id) {
+        payment.providerReference = razorpay_payment_id;
+      }
       await payment.save({ session });
 
       const { rawToken, qrImageDataUrl } = await finalizePaidOrder(order, session);
