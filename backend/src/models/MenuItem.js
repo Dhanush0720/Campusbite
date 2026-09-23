@@ -20,6 +20,7 @@ const menuItemSchema = new mongoose.Schema(
       enum: ['READY_FOOD', 'MADE_TO_ORDER'],
       default: 'MADE_TO_ORDER',
     },
+    isVeg: { type: Boolean, default: true, index: true },
     createdBy: { type: mongoose.Schema.Types.ObjectId, ref: 'User' },
   },
   { timestamps: true }

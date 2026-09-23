@@ -2,29 +2,85 @@
 @tailwind components;
 @tailwind utilities;
 
-body {
-  font-family: ui-sans-serif, system-ui, -apple-system, sans-serif;
+@layer base {
+  body {
+    @apply font-sans antialiased text-neutral-800 bg-[#FAFAFA];
+  }
 }
 
-.status-badge {
-  @apply inline-flex items-center px-2.5 py-1 rounded-full text-xs font-medium;
+/* Glassmorphism & Modern Containers */
+.glass {
+  background: rgba(255, 255, 255, 0.85);
+  backdrop-filter: blur(12px);
+  -webkit-backdrop-filter: blur(12px);
 }
-.status-PLACED, .status-PENDING { @apply bg-neutral-100 text-neutral-700; }
-.status-PAID, .status-CONFIRMED { @apply bg-blue-100 text-blue-700; }
-.status-PREPARING { @apply bg-amber-100 text-amber-700; }
-.status-READY { @apply bg-emerald-100 text-emerald-700; }
-.status-DELIVERED, .status-CLOSED { @apply bg-neutral-200 text-neutral-600; }
-.status-CANCELLED, .status-FAILED { @apply bg-red-100 text-red-700; }
 
-.btn-primary {
-  @apply bg-brand-600 hover:bg-brand-700 text-white font-medium px-4 py-2 rounded-lg transition-colors disabled:opacity-50 disabled:cursor-not-allowed;
+.glass-nav {
+  background: rgba(255, 255, 255, 0.92);
+  backdrop-filter: blur(16px);
+  -webkit-backdrop-filter: blur(16px);
 }
-.btn-secondary {
-  @apply bg-white border border-neutral-300 hover:bg-neutral-50 text-neutral-700 font-medium px-4 py-2 rounded-lg transition-colors disabled:opacity-50;
-}
+
+/* Polished Card */
 .card {
-  @apply bg-white rounded-xl border border-neutral-200 shadow-sm;
+  @apply bg-white rounded-2xl border border-neutral-200/80 shadow-[0_2px_8px_rgba(0,0,0,0.04)] transition-all;
 }
+
+.card-interactive {
+  @apply card hover:shadow-[0_8px_24px_rgba(0,0,0,0.07)] hover:border-neutral-300 transition-all duration-200;
+}
+
+/* Enhanced Buttons */
+.btn-primary {
+  @apply bg-brand-600 hover:bg-brand-700 active:scale-[0.98] text-white font-semibold px-4 py-2.5 rounded-xl shadow-sm hover:shadow-glow transition-all duration-150 disabled:opacity-50 disabled:cursor-not-allowed disabled:hover:shadow-none disabled:active:scale-100;
+}
+
+.btn-secondary {
+  @apply bg-white hover:bg-neutral-50 active:scale-[0.98] border border-neutral-200 text-neutral-700 font-semibold px-4 py-2.5 rounded-xl shadow-xs transition-all duration-150 disabled:opacity-50;
+}
+
+/* Polished Inputs */
 .input {
-  @apply w-full border border-neutral-300 rounded-lg px-3 py-2 text-sm focus:outline-none focus:ring-2 focus:ring-brand-500 focus:border-transparent;
+  @apply w-full bg-white border border-neutral-300 rounded-xl px-3.5 py-2.5 text-sm transition-all focus:outline-none focus:ring-2 focus:ring-brand-500/20 focus:border-brand-500 placeholder:text-neutral-400;
 }
+
+/* Status Badges */
+.status-badge {
+  @apply inline-flex items-center gap-1.5 px-3 py-1 rounded-full text-xs font-semibold tracking-wide border;
+}
+
+.status-PLACED, .status-PENDING {
+  @apply bg-amber-50 text-amber-700 border-amber-200/80;
+}
+.status-PAID, .status-CONFIRMED {
+  @apply bg-blue-50 text-blue-700 border-blue-200/80;
+}
+.status-PREPARING {
+  @apply bg-purple-50 text-purple-700 border-purple-200/80 animate-pulse;
+}
+.status-READY {
+  @apply bg-emerald-50 text-emerald-700 border-emerald-300 font-bold;
+}
+.status-DELIVERED, .status-CLOSED {
+  @apply bg-neutral-100 text-neutral-600 border-neutral-200;
+}
+.status-CANCELLED, .status-FAILED {
+  @apply bg-rose-50 text-rose-700 border-rose-200/80;
+}
+
+/* Subtle scrollbar */
+::-webkit-scrollbar {
+  width: 6px;
+  height: 6px;
+}
+::-webkit-scrollbar-track {
+  background: transparent;
+}
+::-webkit-scrollbar-thumb {
+  background: #d4d4d8;
+  border-radius: 9999px;
+}
+::-webkit-scrollbar-thumb:hover {
+  background: #a1a1aa;
+}
+

@@ -4,10 +4,11 @@ const AuditLog = require('../models/AuditLog');
 // GET /api/menu?category=&search=&isAvailable=
 const getMenu = async (req, res, next) => {
   try {
-    const { category, search, isAvailable } = req.query;
+    const { category, search, isAvailable, isVeg } = req.query;
     const filter = {};
     if (category) filter.category = category;
     if (isAvailable !== undefined) filter.isAvailable = isAvailable === 'true';
+    if (isVeg !== undefined) filter.isVeg = isVeg === 'true';
     if (search) filter.$text = { $search: search };
 
     const items = await MenuItem.find(filter).sort({ category: 1, name: 1 });

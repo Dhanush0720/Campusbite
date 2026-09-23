@@ -3,6 +3,8 @@ import { useParams, Link } from 'react-router-dom';
 import { CheckCircle2, Circle, Clock, Utensils, Zap, QrCode } from 'lucide-react';
 import api from '../../api/axios';
 import { useSocket } from '../../context/SocketContext';
+import { DietaryDot } from '../../components/DietaryBadge';
+
 
 const KITCHEN_STEPS = ['PLACED', 'CONFIRMED', 'PREPARING', 'READY', 'DELIVERED'];
 const READY_STEPS = ['PLACED', 'CONFIRMED', 'READY', 'DELIVERED'];
@@ -131,14 +133,20 @@ const OrderTracking = () => {
       )}
 
       {/* Items Summary */}
-      <div className="card p-4">
-        <h2 className="font-semibold text-neutral-900 mb-2 text-sm">Order Items</h2>
-        {order.items.map((i, idx) => (
-          <div key={idx} className="flex justify-between text-sm py-1.5 border-b border-neutral-50 last:border-0 text-neutral-700">
-            <span>{i.name} × {i.quantity}</span>
-            <span className="font-medium">₹{i.price * i.quantity}</span>
-          </div>
-        ))}
+      <div className="card p-5 border border-neutral-200 shadow-sm rounded-2xl">
+        <h2 className="font-bold text-neutral-900 mb-3 text-sm uppercase tracking-wider text-neutral-400">Order Items</h2>
+        <div className="divide-y divide-neutral-100">
+          {order.items.map((i, idx) => (
+            <div key={idx} className="flex items-center justify-between text-sm py-2 text-neutral-700">
+              <div className="flex items-center gap-2">
+                <DietaryDot isVeg={i.isVeg} size="sm" />
+                <span className="font-medium text-neutral-900">{i.name}</span>
+                <span className="text-neutral-400 text-xs">× {i.quantity}</span>
+              </div>
+              <span className="font-bold text-neutral-900">₹{i.price * i.quantity}</span>
+            </div>
+          ))}
+        </div>
       </div>
     </div>
   );

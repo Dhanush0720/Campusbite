@@ -24,10 +24,97 @@ const getTransactions = async (req, res, next) => {
   }
 };
 
-// POST /api/wallet/topup  (demo-mode self top-up so the wallet can be tested without a real gateway.
-// A production build should route this through the same UPI verification flow as order payments,
-// and college admins should confirm the applicable regulatory requirements before enabling
-// real-money stored value.)
+const Razorpay = require('razorpay');
+const crypto = require('crypto');
+
+const getRazorpayInstance = () => {
+  if (process.env.RAZORPAY_KEY_ID && process.env.RAZORPAY_KEY_SECRET) {
+    return new Razorpay({
+      key_id: process.env.RAZORPAY_KEY_ID,
+      key_secret: process.env.RAZORPAY_KEY_SECRET,
+    });
+  }
+  return null;
+};
+
+// POST /api/wallet/topup/razorpay/create
+const createRazorpayTopUp = async (req, res, next) => {
+  try {
+    const { amount } = req.body;
+    if (!amount || amount <= 0) {
+      return res.status(400).json({ message: 'Amount must be positive' });
+    }
+    const rzp = getRazorpayInstance();
+    if (!rzp) {
+      return res.status(200).json({ isDemo: true, message: 'Razorpay keys not configured; using direct top-up' });
+    }
+
+    const rzpOrder = await rzp.orders.create({
+      amount: Math.round(Number(amount) * 100),
+      currency: 'INR',
+      receipt: `topup_${Date.now()}`,
+      notes: { userId: req.user._id.toString(), type: 'WALLET_TOPUP' },
+    });
+
+    res.status(201).json({
+      razorpay: {
+        orderId: rzpOrder.id,
+        amount: rzpOrder.amount,
+        currency: rzpOrder.currency,
+        key: process.env.RAZORPAY_KEY_ID,
+      },
+    });
+  } catch (err) {
+    next(err);
+  }
+};
+
+// POST /api/wallet/topup/razorpay/verify
+const verifyRazorpayTopUp = async (req, res, next) => {
+  try {
+    const { amount, razorpay_order_id, razorpay_payment_id, razorpay_signature } = req.body;
+
+    if (!razorpay_order_id || !razorpay_payment_id || !razorpay_signature) {
+      return res.status(400).json({ message: 'Missing Razorpay signature details' });
+    }
+
+    if (!process.env.RAZORPAY_KEY_SECRET) {
+      return res.status(500).json({ message: 'RAZORPAY_KEY_SECRET not configured' });
+    }
+
+    const expectedSignature = crypto
+      .createHmac('sha256', process.env.RAZORPAY_KEY_SECRET)
+      .update(`${razorpay_order_id}|${razorpay_payment_id}`)
+      .digest('hex');
+
+    if (expectedSignature !== razorpay_signature) {
+      return res.status(400).json({ message: 'Invalid payment signature' });
+    }
+
+    const session = await mongoose.startSession();
+    let txn;
+    try {
+      await session.withTransaction(async () => {
+        txn = await creditWallet(
+          {
+            userId: req.user._id,
+            amount: Number(amount),
+            note: `Recharge via Razorpay (${razorpay_payment_id})`,
+            idempotencyKey: `topup:${razorpay_payment_id}`,
+          },
+          session
+        );
+      });
+      res.json({ transaction: txn, message: 'Wallet recharged successfully' });
+    } finally {
+      session.endSession();
+    }
+  } catch (err) {
+    next(err);
+  }
+};
+
+// POST /api/wallet/topup (direct/demo top-up fallback)
 const topUp = async (req, res, next) => {
   const { amount } = req.body;
   if (!amount || amount <= 0) {
@@ -42,7 +129,7 @@ const topUp = async (req, res, next) => {
     let txn;
     await session.withTransaction(async () => {
       txn = await creditWallet(
-        { userId: req.user._id, amount, note: 'Self top-up (demo mode)' },
+        { userId: req.user._id, amount, note: 'Self top-up' },
         session
       );
     });
@@ -54,4 +141,4 @@ const topUp = async (req, res, next) => {
   }
 };
 
-module.exports = { getBalance, getTransactions, topUp };
+module.exports = { getBalance, getTransactions, topUp, createRazorpayTopUp, verifyRazorpayTopUp };
