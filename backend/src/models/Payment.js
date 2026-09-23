@@ -3,8 +3,8 @@ const mongoose = require('mongoose');
 const paymentSchema = new mongoose.Schema(
   {
     orderId: { type: mongoose.Schema.Types.ObjectId, ref: 'Order', required: true, index: true },
-    userId: { type: mongoose.Schema.Types.ObjectId, ref: 'User', required: true },
-    method: { type: String, enum: ['UPI', 'WALLET'], required: true },
+    userId: { type: mongoose.Schema.Types.ObjectId, ref: 'User', index: true },
+    method: { type: String, enum: ['UPI', 'WALLET', 'RAZORPAY'], required: true },
     amount: { type: Number, required: true },
     provider: { type: String, default: 'sandbox' },
     providerReference: { type: String, index: true }, // UPI txn ref / gateway id
