@@ -24,6 +24,7 @@ import Profile from './pages/student/Profile';
 import StaffDashboard from './pages/staff/Dashboard';
 import QRScanner from './pages/staff/QRScanner';
 import StaffHistory from './pages/staff/History';
+import WalletApprovals from './pages/staff/WalletApprovals';
 
 import ManagerDashboard from './pages/manager/Dashboard';
 import ManagerMenu from './pages/manager/Menu';
@@ -70,10 +71,12 @@ function App() {
           {/* Staff */}
           <Route path="/staff" element={<ProtectedRoute roles={['staff', 'manager', 'admin']}><StaffDashboard /></ProtectedRoute>} />
           <Route path="/staff/scanner" element={<ProtectedRoute roles={['staff', 'manager', 'admin']}><QRScanner /></ProtectedRoute>} />
+          <Route path="/staff/wallet-approvals" element={<ProtectedRoute roles={['staff', 'manager', 'admin']}><WalletApprovals /></ProtectedRoute>} />
           <Route path="/staff/history" element={<ProtectedRoute roles={['staff', 'manager', 'admin']}><StaffHistory /></ProtectedRoute>} />
 
           {/* Manager / Admin */}
           <Route path="/manager" element={<ProtectedRoute roles={['manager', 'admin']}><ManagerDashboard /></ProtectedRoute>} />
+          <Route path="/manager/wallet-approvals" element={<ProtectedRoute roles={['manager', 'admin']}><WalletApprovals /></ProtectedRoute>} />
           <Route path="/manager/menu" element={<ProtectedRoute roles={['manager', 'admin']}><ManagerMenu /></ProtectedRoute>} />
           <Route path="/manager/orders" element={<ProtectedRoute roles={['manager', 'admin']}><ManagerOrders /></ProtectedRoute>} />
           <Route path="/manager/inventory" element={<ProtectedRoute roles={['manager', 'admin']}><Inventory /></ProtectedRoute>} />

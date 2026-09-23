@@ -12,16 +12,23 @@ import {
   Check,
   ExternalLink,
   Smartphone,
+  Banknote,
+  Clock,
+  AlertCircle,
+  X,
 } from 'lucide-react';
 import api from '../../api/axios';
 import { useAuth } from '../../context/AuthContext';
+import { useSocket } from '../../context/SocketContext';
 
 const PRESETS = [100, 200, 500, 1000];
 
 const Wallet = () => {
   const { user } = useAuth();
+  const { events } = useSocket();
   const [balance, setBalance] = useState(0);
   const [transactions, setTransactions] = useState([]);
+  const [myRequests, setMyRequests] = useState([]);
   const [topUpAmount, setTopUpAmount] = useState('200');
   const [busy, setBusy] = useState(false);
   const [successMsg, setSuccessMsg] = useState('');
@@ -34,19 +41,81 @@ const Wallet = () => {
 
   const load = async () => {
     try {
-      const [b, t] = await Promise.all([api.get('/wallet/balance'), api.get('/wallet/transactions')]);
+      const [b, t, r] = await Promise.all([
+        api.get('/wallet/balance'),
+        api.get('/wallet/transactions'),
+        api.get('/wallet/recharge/my'),
+      ]);
       setBalance(b.data.balance);
       setTransactions(t.data.transactions);
+      setMyRequests(r.data.requests || []);
     } catch (e) {
       console.error(e);
     }
   };
 
-  useEffect(() => { load(); }, []);
+  useEffect(() => {
+    load();
+  }, []);
+
+  // Listen to socket events for real-time cashier approval
+  useEffect(() => {
+    const latest = events[0];
+    if (latest?.type === 'recharge:status') {
+      const payload = latest.payload;
+      if (payload?.status === 'APPROVED') {
+        setSuccessMsg(`🎉 Cashier approved token #${payload.requestCode}! ₹${payload.amount} added to your wallet.`);
+        setError('');
+      } else if (payload?.status === 'REJECTED') {
+        setError(`Request #${payload.requestCode} was rejected: ${payload.reason || 'Cash not received'}`);
+      }
+      load();
+    }
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [events]);
+
+  const activePending = myRequests.find((r) => r.status === 'PENDING');
+
+  // Submit Counter Cash Recharge Request
+  const handleRequestCashRecharge = async (e) => {
+    if (e) e.preventDefault();
+    const amountNum = Number(topUpAmount);
+    if (!amountNum || amountNum <= 0) {
+      setError('Please enter a valid amount');
+      return;
+    }
+
+    setBusy(true);
+    setError('');
+    setSuccessMsg('');
+
+    try {
+      const { data } = await api.post('/wallet/recharge/request', {
+        amount: amountNum,
+        paymentType: 'CASH',
+      });
+      setSuccessMsg(`Ticket created! Hand ₹${amountNum} cash to the canteen cashier with token ${data.request.requestCode}`);
+      await load();
+    } catch (err) {
+      setError(err.response?.data?.message || 'Could not submit recharge request');
+    } finally {
+      setBusy(false);
+    }
+  };
+
+  // Cancel pending request
+  const handleCancelRequest = async (id) => {
+    try {
+      await api.patch(`/wallet/recharge/${id}/cancel`);
+      setSuccessMsg('Recharge request cancelled');
+      await load();
+    } catch (err) {
+      setError(err.response?.data?.message || 'Failed to cancel request');
+    }
+  };
 
   // Initiate Dynamic UPI Top-Up
-  const handleUpiTopUp = async (e) => {
-    if (e) e.preventDefault();
+  const handleUpiTopUp = async () => {
     const amountNum = Number(topUpAmount);
     if (!amountNum || amountNum <= 0) {
       setError('Please enter a valid amount');
@@ -89,27 +158,6 @@ const Wallet = () => {
     }
   };
 
-  // Quick Demo / Instant Top-Up (for testing or instant credit)
-  const handleDemoTopUp = async () => {
-    const amountNum = Number(topUpAmount);
-    if (!amountNum || amountNum <= 0) {
-      setError('Please enter a valid amount');
-      return;
-    }
-    setBusy(true);
-    setError('');
-    setSuccessMsg('');
-    try {
-      await api.post('/wallet/topup', { amount: amountNum });
-      setSuccessMsg(`₹${amountNum} added directly to your Campus Wallet!`);
-      await load();
-    } catch (err) {
-      setError(err.response?.data?.message || 'Could not process top-up');
-    } finally {
-      setBusy(false);
-    }
-  };
-
   const handleCopyVpa = () => {
     if (upiModal?.payeeVpa) {
       navigator.clipboard.writeText(upiModal.payeeVpa);
@@ -144,6 +192,46 @@ const Wallet = () => {
         </div>
       </div>
 
+      {/* Active Pending Cash Request Notice */}
+      {activePending && (
+        <div className="bg-amber-50/90 border-2 border-amber-300 rounded-2xl p-5 mt-6 shadow-xs animate-in fade-in">
+          <div className="flex items-center justify-between mb-2">
+            <div className="flex items-center gap-2">
+              <span className="w-2.5 h-2.5 rounded-full bg-amber-500 animate-ping" />
+              <span className="text-xs font-bold uppercase tracking-wider text-amber-900">
+                Awaiting Counter Cash Verification
+              </span>
+            </div>
+            <span className="text-xs font-mono font-black px-2 py-0.5 rounded bg-amber-200 text-amber-900">
+              {activePending.requestCode}
+            </span>
+          </div>
+
+          <div className="flex items-baseline justify-between my-2">
+            <div>
+              <p className="text-xs text-amber-800">Cash to hand to cashier:</p>
+              <p className="text-2xl font-black text-neutral-900">₹{activePending.amount}</p>
+            </div>
+            <div className="text-right">
+              <span className="text-[11px] text-amber-700 block">Show Token to Staff:</span>
+              <span className="text-xl font-mono font-black text-amber-950">{activePending.requestCode}</span>
+            </div>
+          </div>
+
+          <p className="text-xs text-neutral-600 bg-white/80 p-2.5 rounded-xl border border-amber-200/60 mb-3">
+            Hand over physical cash to the canteen cashier. The moment the staff clicks <strong>Approve</strong>, your balance will increase instantly!
+          </p>
+
+          <button
+            type="button"
+            onClick={() => handleCancelRequest(activePending._id)}
+            className="text-xs text-rose-600 hover:text-rose-800 font-semibold underline"
+          >
+            Cancel this ticket
+          </button>
+        </div>
+      )}
+
       {/* Top-up Form */}
       <div className="card p-5 mt-6 border border-neutral-200 shadow-sm">
         <div className="flex items-center justify-between mb-3">
@@ -151,7 +239,7 @@ const Wallet = () => {
             <Sparkles size={16} className="text-brand-600" /> Recharge Wallet
           </h2>
           <span className="text-[11px] font-semibold text-emerald-700 bg-emerald-50 border border-emerald-200 px-2 py-0.5 rounded-full">
-            0% Gateway Fees
+            Staff Verified
           </span>
         </div>
 
@@ -173,7 +261,7 @@ const Wallet = () => {
           ))}
         </div>
 
-        <form onSubmit={handleUpiTopUp} className="space-y-3">
+        <form onSubmit={handleRequestCashRecharge} className="space-y-3">
           <div className="relative">
             <span className="absolute left-3.5 top-3 text-neutral-400 font-bold text-sm">₹</span>
             <input
@@ -192,28 +280,28 @@ const Wallet = () => {
             <button
               type="submit"
               disabled={busy}
-              className="btn-primary w-full text-xs sm:text-sm py-2.5 px-4 flex items-center justify-center gap-1.5 shadow-md"
+              className="btn-primary w-full text-xs sm:text-sm py-2.5 px-4 flex items-center justify-center gap-1.5 shadow-md bg-emerald-600 hover:bg-emerald-700"
             >
-              <QrCode size={15} />
-              {busy ? 'Generating QR…' : 'Pay via UPI QR'}
+              <Banknote size={16} />
+              {busy ? 'Requesting…' : 'Request Cash Top-Up'}
             </button>
             <button
               type="button"
-              onClick={handleDemoTopUp}
+              onClick={handleUpiTopUp}
               disabled={busy}
               className="btn-secondary w-full text-xs sm:text-sm py-2.5 px-4 flex items-center justify-center gap-1.5"
             >
-              <Zap size={15} className="text-amber-500" />
-              Instant Top-Up (Demo)
+              <QrCode size={15} />
+              Pay via UPI QR
             </button>
           </div>
         </form>
 
         {/* Cash Notice */}
-        <div className="mt-4 p-3 bg-amber-50/70 border border-amber-200/80 rounded-xl text-xs text-amber-900 flex items-start gap-2">
-          <span className="text-base leading-none">💡</span>
+        <div className="mt-4 p-3 bg-neutral-50 border border-neutral-200 rounded-xl text-xs text-neutral-600 flex items-start gap-2">
+          <span className="text-base leading-none">ℹ️</span>
           <div>
-            <strong>Cash Recharge at Counter:</strong> You can also hand physical cash to the canteen cashier and have your Campus Wallet credited immediately!
+            <strong>How counter cash works:</strong> Tap <em>"Request Cash Top-Up"</em> to generate a verification token. Hand the cash to the canteen cashier, who will approve and credit your balance immediately.
           </div>
         </div>
 

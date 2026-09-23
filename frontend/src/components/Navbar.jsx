@@ -17,7 +17,8 @@ import {
   Package,
   Users,
   ChevronRight,
-  ShieldAlert
+  ShieldAlert,
+  Banknote,
 } from 'lucide-react';
 import { useAuth } from '../context/AuthContext';
 import { useCart } from '../context/CartContext';
@@ -42,10 +43,12 @@ const NAV_BY_ROLE = {
   staff: [
     { to: '/staff', label: 'Dashboard', icon: LayoutDashboard },
     { to: '/staff/scanner', label: 'QR Scanner', icon: QrCode },
+    { to: '/staff/wallet-approvals', label: 'Approvals', icon: Banknote },
     { to: '/staff/history', label: 'History', icon: Clock },
   ],
   manager: [
     { to: '/manager', label: 'Dashboard', icon: LayoutDashboard },
+    { to: '/manager/wallet-approvals', label: 'Approvals', icon: Banknote },
     { to: '/manager/menu', label: 'Menu', icon: UtensilsCrossed },
     { to: '/manager/orders', label: 'Orders', icon: Clock },
     { to: '/manager/inventory', label: 'Inventory', icon: Package },
@@ -54,6 +57,7 @@ const NAV_BY_ROLE = {
   ],
   admin: [
     { to: '/manager', label: 'Dashboard', icon: LayoutDashboard },
+    { to: '/manager/wallet-approvals', label: 'Approvals', icon: Banknote },
     { to: '/manager/menu', label: 'Menu', icon: UtensilsCrossed },
     { to: '/manager/orders', label: 'Orders', icon: Clock },
     { to: '/manager/inventory', label: 'Inventory', icon: Package },
@@ -130,6 +134,7 @@ const Navbar = () => {
       return [
         { to: '/staff', label: 'Dashboard', icon: LayoutDashboard },
         { to: '/staff/scanner', label: 'Scanner', icon: QrCode },
+        { to: '/staff/wallet-approvals', label: 'Approvals', icon: Banknote },
         { to: '/staff/history', label: 'History', icon: Clock },
       ];
     }

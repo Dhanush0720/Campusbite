@@ -32,6 +32,9 @@ export const SocketProvider = ({ children }) => {
     socket.on('order:status', pushEvent('order:status'));
     socket.on('order:new', pushEvent('order:new'));
     socket.on('inventory:low-stock', pushEvent('inventory:low-stock'));
+    socket.on('recharge:new', pushEvent('recharge:new'));
+    socket.on('recharge:status', pushEvent('recharge:status'));
+    socket.on('recharge:updated', pushEvent('recharge:updated'));
 
     return () => socket.disconnect();
   }, [user]);

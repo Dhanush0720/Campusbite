@@ -29,6 +29,13 @@ const crypto = require('crypto');
 const QRCode = require('qrcode');
 const { v4: uuidv4 } = require('uuid');
 const User = require('../models/User');
+const WalletRechargeRequest = require('../models/WalletRechargeRequest');
+const { notifyUser, notifyRole } = require('../sockets');
+
+const generateRequestCode = () => {
+  const num = Math.floor(1000 + Math.random() * 9000);
+  return `CR-${num}`;
+};
 
 const getRazorpayInstance = () => {
   if (process.env.RAZORPAY_KEY_ID && process.env.RAZORPAY_KEY_SECRET) {
@@ -280,6 +287,208 @@ const topUp = async (req, res, next) => {
   }
 };
 
+// POST /api/wallet/recharge/request (student raises counter cash top-up ticket)
+const requestRecharge = async (req, res, next) => {
+  try {
+    const { amount, paymentType = 'CASH', notes } = req.body;
+    const numAmount = Number(amount);
+    if (!numAmount || numAmount <= 0) {
+      return res.status(400).json({ message: 'Amount must be a positive number' });
+    }
+    if (numAmount > 10000) {
+      return res.status(400).json({ message: 'Single recharge capped at ₹10,000' });
+    }
+
+    // Cancel any existing pending requests for this student to keep queue clean
+    await WalletRechargeRequest.updateMany(
+      { userId: req.user._id, status: 'PENDING' },
+      { status: 'CANCELLED', rejectionReason: 'Replaced by a newer request' }
+    );
+
+    // Generate unique requestCode
+    let requestCode = generateRequestCode();
+    let collision = await WalletRechargeRequest.findOne({ requestCode, status: 'PENDING' });
+    while (collision) {
+      requestCode = generateRequestCode();
+      collision = await WalletRechargeRequest.findOne({ requestCode, status: 'PENDING' });
+    }
+
+    const request = await WalletRechargeRequest.create({
+      userId: req.user._id,
+      studentName: req.user.name,
+      studentEmail: req.user.email,
+      studentId: req.user.studentId || '',
+      studentPhone: req.user.phone || '',
+      amount: numAmount,
+      requestCode,
+      paymentType,
+      notes,
+      status: 'PENDING',
+    });
+
+    // Notify staff & managers in real-time
+    notifyRole('staff', 'recharge:new', request);
+    notifyRole('manager', 'recharge:new', request);
+
+    res.status(201).json({
+      message: 'Recharge request submitted. Please pay cash at the canteen counter.',
+      request,
+    });
+  } catch (err) {
+    next(err);
+  }
+};
+
+// GET /api/wallet/recharge/my (student views their tickets)
+const getMyRechargeRequests = async (req, res, next) => {
+  try {
+    const requests = await WalletRechargeRequest.find({ userId: req.user._id })
+      .sort({ createdAt: -1 })
+      .limit(10);
+    res.json({ requests });
+  } catch (err) {
+    next(err);
+  }
+};
+
+// PATCH /api/wallet/recharge/:id/cancel (student cancels a pending ticket)
+const cancelRechargeRequest = async (req, res, next) => {
+  try {
+    const request = await WalletRechargeRequest.findOne({
+      _id: req.params.id,
+      userId: req.user._id,
+      status: 'PENDING',
+    });
+    if (!request) {
+      return res.status(404).json({ message: 'Pending recharge request not found' });
+    }
+    request.status = 'CANCELLED';
+    await request.save();
+
+    notifyRole('staff', 'recharge:updated', request);
+    notifyRole('manager', 'recharge:updated', request);
+
+    res.json({ message: 'Request cancelled', request });
+  } catch (err) {
+    next(err);
+  }
+};
+
+// GET /api/wallet/recharge/pending (staff/manager/admin view queue)
+const getPendingRechargeRequests = async (req, res, next) => {
+  try {
+    const { status = 'PENDING', search } = req.query;
+    const filter = {};
+    if (status && status !== 'ALL') {
+      filter.status = status;
+    }
+    if (search) {
+      const regex = new RegExp(search.trim(), 'i');
+      filter.$or = [
+        { requestCode: regex },
+        { studentName: regex },
+        { studentEmail: regex },
+        { studentId: regex },
+      ];
+    }
+    const requests = await WalletRechargeRequest.find(filter)
+      .sort({ createdAt: -1 })
+      .limit(100);
+    res.json({ requests });
+  } catch (err) {
+    next(err);
+  }
+};
+
+// PATCH /api/wallet/recharge/:id/approve (staff/manager/admin collects cash and approves)
+const approveRechargeRequest = async (req, res, next) => {
+  try {
+    const request = await WalletRechargeRequest.findById(req.params.id);
+    if (!request) {
+      return res.status(404).json({ message: 'Recharge request not found' });
+    }
+    if (request.status !== 'PENDING') {
+      return res.status(400).json({ message: `Request is already ${request.status.toLowerCase()}` });
+    }
+
+    const session = await mongoose.startSession();
+    let txn;
+    try {
+      await session.withTransaction(async () => {
+        request.status = 'APPROVED';
+        request.approvedBy = req.user._id;
+        request.approvedByName = req.user.name || req.user.role;
+        request.approvedAt = new Date();
+        await request.save({ session });
+
+        txn = await creditWallet(
+          {
+            userId: request.userId,
+            amount: request.amount,
+            note: `Counter Cash Recharge (${request.requestCode}) verified by ${req.user.name}`,
+            idempotencyKey: `recharge:${request._id}`,
+          },
+          session
+        );
+      });
+    } finally {
+      session.endSession();
+    }
+
+    // Real-time notification to the student's room
+    notifyUser(request.userId.toString(), 'recharge:status', {
+      status: 'APPROVED',
+      amount: request.amount,
+      requestCode: request.requestCode,
+      request,
+    });
+    notifyRole('staff', 'recharge:updated', request);
+    notifyRole('manager', 'recharge:updated', request);
+
+    res.json({
+      message: `Successfully approved ₹${request.amount} for ${request.studentName}`,
+      request,
+      transaction: txn,
+    });
+  } catch (err) {
+    next(err);
+  }
+};
+
+// PATCH /api/wallet/recharge/:id/reject (staff/manager rejects fake/unpaid ticket)
+const rejectRechargeRequest = async (req, res, next) => {
+  try {
+    const { reason } = req.body;
+    const request = await WalletRechargeRequest.findById(req.params.id);
+    if (!request) {
+      return res.status(404).json({ message: 'Recharge request not found' });
+    }
+    if (request.status !== 'PENDING') {
+      return res.status(400).json({ message: `Request is already ${request.status.toLowerCase()}` });
+    }
+
+    request.status = 'REJECTED';
+    request.approvedBy = req.user._id;
+    request.approvedByName = req.user.name || req.user.role;
+    request.rejectionReason = reason || 'Cash payment not received';
+    await request.save();
+
+    notifyUser(request.userId.toString(), 'recharge:status', {
+      status: 'REJECTED',
+      amount: request.amount,
+      requestCode: request.requestCode,
+      reason: request.rejectionReason,
+      request,
+    });
+    notifyRole('staff', 'recharge:updated', request);
+    notifyRole('manager', 'recharge:updated', request);
+
+    res.json({ message: 'Recharge request rejected', request });
+  } catch (err) {
+    next(err);
+  }
+};
+
 module.exports = {
   getBalance,
   getTransactions,
@@ -289,4 +498,10 @@ module.exports = {
   cashierTopUp,
   createRazorpayTopUp,
   verifyRazorpayTopUp,
+  requestRecharge,
+  getMyRechargeRequests,
+  cancelRechargeRequest,
+  getPendingRechargeRequests,
+  approveRechargeRequest,
+  rejectRechargeRequest,
 };
