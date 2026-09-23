@@ -51,46 +51,49 @@ const Cart = () => {
         </div>
       )}
 
-      <div className="card divide-y divide-neutral-100 shadow-sm border border-neutral-200 rounded-2xl overflow-hidden mb-6">
+      <div className="card divide-y divide-neutral-100 shadow-sm border border-neutral-200 rounded-2xl overflow-hidden mb-5">
         {items.map((i) => (
-          <div key={i.menuItemId} className="p-4 sm:p-5 flex items-center justify-between gap-3 hover:bg-neutral-50/50 transition-colors">
-            <div className="flex items-start gap-3 flex-1 min-w-0">
-              <div className="mt-1">
+          <div key={i.menuItemId} className="p-3.5 sm:p-5 flex items-center justify-between gap-2.5 sm:gap-3 hover:bg-neutral-50/50 transition-colors">
+            <div className="flex items-start gap-2.5 sm:gap-3 flex-1 min-w-0">
+              <div className="mt-1 shrink-0">
                 <DietaryDot isVeg={i.isVeg} size="sm" />
               </div>
-              <div className="min-w-0">
-                <p className="font-semibold text-neutral-900 truncate text-sm sm:text-base">{i.name}</p>
-                <div className="flex items-center gap-2 mt-0.5">
-                  <span className="text-xs text-neutral-500">₹{i.price} each</span>
-                  <span className="text-[10px] px-1.5 py-0.2 bg-neutral-100 text-neutral-600 rounded">
+              <div className="min-w-0 pr-1">
+                <p className="font-semibold text-neutral-900 truncate text-xs sm:text-sm">{i.name}</p>
+                <div className="flex items-center gap-1.5 mt-0.5">
+                  <span className="text-[11px] text-neutral-500">₹{i.price}</span>
+                  <span className="text-[9px] px-1.5 py-0.2 bg-neutral-100 text-neutral-600 rounded font-medium">
                     {i.preparationType === 'READY_FOOD' ? 'Instant' : 'Kitchen'}
                   </span>
                 </div>
               </div>
             </div>
 
-            <div className="flex items-center gap-2">
+            <div className="flex items-center gap-1.5 sm:gap-2 shrink-0">
               <button
                 type="button"
                 onClick={() => updateQuantity(i.menuItemId, i.quantity - 1)}
-                className="w-7 h-7 rounded-lg border border-neutral-200 hover:border-neutral-300 bg-white flex items-center justify-center text-neutral-600 active:scale-95 transition-all"
+                className="w-7 h-7 sm:w-8 sm:h-8 rounded-lg border border-neutral-200 hover:border-neutral-300 bg-white flex items-center justify-center text-neutral-600 active:scale-90 transition-all"
+                aria-label="Decrease quantity"
               >
                 <Minus size={13} />
               </button>
-              <span className="text-sm font-bold w-5 text-center text-neutral-800">{i.quantity}</span>
+              <span className="text-xs sm:text-sm font-bold w-4 text-center text-neutral-800">{i.quantity}</span>
               <button
                 type="button"
                 onClick={() => updateQuantity(i.menuItemId, i.quantity + 1)}
                 disabled={i.quantity >= (i.availableQuantity || 99)}
-                className="w-7 h-7 rounded-lg border border-neutral-200 hover:border-neutral-300 bg-white flex items-center justify-center text-neutral-600 active:scale-95 disabled:opacity-40 transition-all"
+                className="w-7 h-7 sm:w-8 sm:h-8 rounded-lg border border-neutral-200 hover:border-neutral-300 bg-white flex items-center justify-center text-neutral-600 active:scale-90 disabled:opacity-40 transition-all"
+                aria-label="Increase quantity"
               >
                 <Plus size={13} />
               </button>
             </div>
 
-            <div className="text-right pl-2">
-              <span className="font-bold text-neutral-900 text-sm sm:text-base">₹{i.price * i.quantity}</span>
+            <div className="text-right shrink-0 min-w-[50px]">
+              <span className="font-bold text-neutral-900 text-xs sm:text-sm">₹{i.price * i.quantity}</span>
             </div>
+
 
             <button
               type="button"

@@ -148,16 +148,16 @@ const Wallet = () => {
           ))}
         </div>
 
-        <form onSubmit={handleTopUp} className="flex gap-2">
+        <form onSubmit={handleTopUp} className="flex flex-col sm:flex-row gap-2.5">
           <div className="relative flex-1">
-            <span className="absolute left-3 top-2.5 text-neutral-400 font-semibold text-sm">₹</span>
+            <span className="absolute left-3.5 top-3 text-neutral-400 font-bold text-sm">₹</span>
             <input
               type="number"
               min="10"
               max="5000"
               required
-              className="input pl-7 text-sm font-medium"
-              placeholder="Enter amount"
+              className="input pl-8 text-sm font-semibold"
+              placeholder="Enter custom amount"
               value={topUpAmount}
               onChange={(e) => setTopUpAmount(e.target.value)}
             />
@@ -165,12 +165,13 @@ const Wallet = () => {
           <button
             type="submit"
             disabled={busy}
-            className="btn-primary whitespace-nowrap text-sm px-5 flex items-center gap-1.5"
+            className="btn-primary w-full sm:w-auto whitespace-nowrap text-sm py-3 sm:py-2.5 px-6 flex items-center justify-center gap-1.5 shadow-md"
           >
-            <Zap size={14} />
+            <Zap size={15} />
             {busy ? 'Opening…' : 'Add via UPI / Card'}
           </button>
         </form>
+
 
         {successMsg && (
           <div className="mt-3 p-3 bg-emerald-50 text-emerald-800 text-xs rounded-lg flex items-center gap-2 border border-emerald-200">

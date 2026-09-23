@@ -54,23 +54,26 @@ const Menu = () => {
           <p className="text-sm text-neutral-500 mt-0.5">Order ahead, skip the queue, pay seamlessly.</p>
         </div>
         <div className="relative w-full sm:w-80">
-          <Search className="absolute left-3.5 top-3 text-neutral-400" size={16} />
+          <Search className="absolute left-3.5 top-1/2 -translate-y-1/2 text-neutral-400 pointer-events-none" size={17} />
           <input
-            className="input pl-10 py-2.5 text-sm rounded-xl shadow-xs"
+            className="w-full bg-white border border-neutral-300 rounded-xl pl-10 pr-9 py-2.5 text-sm transition-all focus:outline-none focus:ring-2 focus:ring-brand-500/20 focus:border-brand-500 placeholder:text-neutral-400 shadow-xs"
             placeholder="Search dosas, chai, biryani…"
             value={search}
             onChange={(e) => setSearch(e.target.value)}
           />
           {search && (
             <button
+              type="button"
               onClick={() => setSearch('')}
-              className="absolute right-3 top-2.5 text-xs text-neutral-400 hover:text-neutral-600 bg-neutral-100 rounded-full w-5 h-5 flex items-center justify-center"
+              className="absolute right-3 top-1/2 -translate-y-1/2 text-xs text-neutral-400 hover:text-neutral-600 bg-neutral-100 rounded-full w-5 h-5 flex items-center justify-center transition-colors"
+              aria-label="Clear search"
             >
               ✕
             </button>
           )}
         </div>
       </div>
+
 
       {/* Dietary + Category Filters */}
       <div className="flex flex-wrap items-center justify-between gap-3 mb-6 pb-2 border-b border-neutral-100">
@@ -201,36 +204,38 @@ const Menu = () => {
                     {item.availableQuantity > 0 ? (
                       <span className="text-neutral-500">{item.availableQuantity} available</span>
                     ) : (
-                      <span className="text-red-500 font-semibold">Sold Out</span>
+                      <span className="text-rose-500 font-semibold">Sold Out</span>
                     )}
                   </span>
 
                   {qty > 0 ? (
-                    <div className="flex items-center gap-2 bg-neutral-900 text-white px-2 py-1 rounded-lg shadow-sm">
+                    <div className="flex items-center gap-1.5 sm:gap-2 bg-neutral-900 text-white px-2 py-1 rounded-xl shadow-sm">
                       <button
                         onClick={() => updateQuantity(item._id, qty - 1)}
-                        className="w-5 h-5 rounded hover:bg-neutral-700 flex items-center justify-center transition-colors"
+                        className="w-7 h-7 sm:w-6 sm:h-6 rounded-lg hover:bg-neutral-700 active:bg-neutral-600 flex items-center justify-center transition-colors"
                         title="Decrease"
+                        aria-label="Decrease quantity"
                       >
-                        <Minus size={12} />
+                        <Minus size={13} />
                       </button>
-                      <span className="text-xs font-bold w-4 text-center">{qty}</span>
+                      <span className="text-xs sm:text-sm font-bold w-5 text-center">{qty}</span>
                       <button
                         onClick={() => addItem(item)}
                         disabled={qty >= item.availableQuantity}
-                        className="w-5 h-5 rounded hover:bg-neutral-700 flex items-center justify-center transition-colors disabled:opacity-40"
+                        className="w-7 h-7 sm:w-6 sm:h-6 rounded-lg hover:bg-neutral-700 active:bg-neutral-600 flex items-center justify-center transition-colors disabled:opacity-40"
                         title="Increase"
+                        aria-label="Increase quantity"
                       >
-                        <Plus size={12} />
+                        <Plus size={13} />
                       </button>
                     </div>
                   ) : (
                     <button
                       onClick={() => addItem(item)}
                       disabled={item.availableQuantity === 0}
-                      className="btn-primary text-xs px-4 py-1.5 rounded-lg shadow-xs font-bold flex items-center gap-1"
+                      className="btn-primary text-xs px-4 py-2 rounded-xl shadow-xs font-bold flex items-center gap-1.5 active:scale-95"
                     >
-                      <Plus size={13} /> Add
+                      <Plus size={14} /> Add
                     </button>
                   )}
                 </div>
@@ -240,15 +245,15 @@ const Menu = () => {
         </div>
       )}
 
-      {/* Floating View Cart Pill for Mobile / Desktop */}
+      {/* Floating View Cart Pill for Mobile / Desktop (Positioned above mobile bottom bar) */}
       {cartItems.length > 0 && (
-        <div className="fixed bottom-6 left-1/2 -translate-x-1/2 z-30 w-[90%] max-w-md">
+        <div className="fixed bottom-16 md:bottom-6 left-1/2 -translate-x-1/2 z-30 w-[92%] max-w-md">
           <button
             onClick={() => navigate(`${base}/cart`)}
-            className="w-full bg-neutral-900 hover:bg-black text-white px-6 py-3.5 rounded-2xl shadow-2xl flex items-center justify-between border border-neutral-700 transition-all hover:scale-[1.02] active:scale-[0.98]"
+            className="w-full bg-neutral-900 hover:bg-black text-white px-5 py-3.5 rounded-2xl shadow-2xl flex items-center justify-between border border-neutral-700 transition-all hover:scale-[1.01] active:scale-[0.98]"
           >
             <div className="flex items-center gap-2.5">
-              <span className="bg-brand-600 text-white font-bold text-xs rounded-full w-6 h-6 flex items-center justify-center">
+              <span className="bg-brand-600 text-white font-bold text-xs rounded-full w-6 h-6 flex items-center justify-center shadow-xs">
                 {cartItems.reduce((s, i) => s + i.quantity, 0)}
               </span>
               <span className="text-sm font-semibold">View Order Cart</span>
@@ -264,3 +269,4 @@ const Menu = () => {
 };
 
 export default Menu;
+
