@@ -12,21 +12,31 @@ const Checkout = () => {
 
   const { items, subtotal, clearCart } = useCart();
   const { user } = useAuth();
-  const guestName = sessionStorage.getItem('campusbite_guest_name') || '';
+  const [guestName, setGuestName] = useState(sessionStorage.getItem('campusbite_guest_name') || '');
 
   const [method, setMethod] = useState('UPI');
   const [placing, setPlacing] = useState(false);
   const [error, setError] = useState('');
 
   const handlePlaceOrder = async () => {
-    setPlacing(true);
     setError('');
+
+    if (isGuest && !guestName.trim()) {
+      setError('Please enter your name for the order pass.');
+      return;
+    }
+
+    setPlacing(true);
     try {
+      if (isGuest) {
+        sessionStorage.setItem('campusbite_guest_name', guestName.trim());
+      }
+
       const payload = {
         items: items.map((i) => ({ menuItemId: i.menuItemId, quantity: i.quantity })),
         paymentMethod: method,
       };
-      if (isGuest) payload.guestName = guestName || 'Guest';
+      if (isGuest) payload.guestName = guestName.trim() || 'Guest';
 
       const { data } = await api.post('/orders', payload);
       clearCart();
@@ -45,6 +55,20 @@ const Checkout = () => {
   return (
     <div className="max-w-xl mx-auto px-4 py-8">
       <h1 className="text-2xl font-bold text-neutral-900 mb-6">Checkout</h1>
+
+      {isGuest && (
+        <div className="card p-4 mb-4">
+          <h2 className="font-semibold text-neutral-900 mb-2">Guest Information</h2>
+          <label className="text-xs font-medium text-neutral-600">Your Name (for order counter pickup)</label>
+          <input
+            className="input mt-1 text-sm"
+            placeholder="Enter your name"
+            value={guestName}
+            onChange={(e) => setGuestName(e.target.value)}
+            required
+          />
+        </div>
+      )}
 
       <div className="card p-4 mb-4">
         <h2 className="font-semibold text-neutral-900 mb-3">Order Summary</h2>

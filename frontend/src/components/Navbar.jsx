@@ -48,12 +48,15 @@ const Navbar = () => {
   const { user, logout } = useAuth();
   const { itemCount } = useCart();
   const navigate = useNavigate();
-  const links = user ? NAV_BY_ROLE[user.role] || [] : [];
+  const guestLinks = [{ to: '/guest/menu', label: 'Menu' }];
+  const links = user ? NAV_BY_ROLE[user.role] || [] : guestLinks;
+  const cartPath = user ? '/student/cart' : '/guest/cart';
+  const showCart = !user || user.role === 'student' || user.role === 'lecturer';
 
   return (
     <header className="sticky top-0 z-40 bg-white border-b border-neutral-200">
       <div className="max-w-6xl mx-auto px-4 h-16 flex items-center justify-between">
-        <Link to="/" className="flex items-center gap-2 font-bold text-lg text-neutral-900">
+        <Link to={user ? '/' : '/guest/menu'} className="flex items-center gap-2 font-bold text-lg text-neutral-900">
           <UtensilsCrossed className="text-brand-600" size={22} />
           CampusBite
         </Link>
@@ -67,11 +70,11 @@ const Navbar = () => {
         </nav>
 
         <div className="flex items-center gap-3">
-          {user && (user.role === 'student' || user.role === 'lecturer') && (
-            <Link to="/student/cart" className="relative p-2 hover:bg-neutral-100 rounded-lg">
-              <ShoppingCart size={20} />
+          {showCart && (
+            <Link to={cartPath} className="relative p-2 hover:bg-neutral-100 rounded-lg" title="View Cart">
+              <ShoppingCart size={20} className="text-neutral-700" />
               {itemCount > 0 && (
-                <span className="absolute -top-1 -right-1 bg-brand-600 text-white text-[10px] rounded-full w-4 h-4 flex items-center justify-center">
+                <span className="absolute -top-1 -right-1 bg-brand-600 text-white text-[10px] font-bold rounded-full w-4 h-4 flex items-center justify-center">
                   {itemCount}
                 </span>
               )}

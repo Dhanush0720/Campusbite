@@ -16,7 +16,7 @@ api.interceptors.response.use(
     if (err.response?.status === 401) {
       localStorage.removeItem('campusbite_token');
       localStorage.removeItem('campusbite_user');
-      if (!window.location.pathname.startsWith('/login')) {
+      if (!window.location.pathname.startsWith('/login') && !window.location.pathname.startsWith('/guest')) {
         window.location.href = '/login';
       }
     }
