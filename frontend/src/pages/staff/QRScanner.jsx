@@ -96,21 +96,29 @@ const QRScanner = () => {
               </div>
             ))}
           </div>
-          <span className={`status-badge status-${order.orderStatus} mt-3`}>{order.orderStatus}</span>
+          <div className="flex items-center gap-2 mt-3">
+            <span className={`status-badge status-${order.orderStatus}`}>{order.orderStatus}</span>
+            {order.orderType === 'READY_FOOD' ? (
+              <span className="text-xs bg-amber-100 text-amber-800 px-2 py-0.5 rounded-full font-medium">⚡ Express Ready Food</span>
+            ) : (
+              <span className="text-xs bg-blue-100 text-blue-800 px-2 py-0.5 rounded-full font-medium">🍳 Kitchen Made-to-Order</span>
+            )}
+          </div>
 
           {error && <p className="text-red-600 text-sm mt-3">{error}</p>}
 
-          {order.orderStatus === 'READY' ? (
-            <button onClick={handleDeliver} disabled={busy} className="btn-primary w-full mt-4">
+          {order.orderStatus === 'DELIVERED' || order.orderStatus === 'CLOSED' ? (
+            <div className="bg-emerald-50 text-emerald-800 text-sm p-3 rounded-lg mt-4 text-center font-semibold">
+              ✅ Order Handed Over & Completed
+            </div>
+          ) : (
+            <button onClick={handleDeliver} disabled={busy} className="btn-primary w-full mt-4 flex items-center justify-center gap-2 py-3 text-base">
+              <CheckCircle2 size={18} />
               {busy ? 'Confirming…' : 'Confirm Handover'}
             </button>
-          ) : (
-            <p className="text-xs text-amber-600 mt-4">
-              Order must reach READY status (kitchen must finish preparing) before handover.
-            </p>
           )}
 
-          <button onClick={reset} className="btn-secondary w-full mt-2">Scan Next</button>
+          <button onClick={reset} className="btn-secondary w-full mt-2">Scan Next Order</button>
         </div>
       )}
     </div>

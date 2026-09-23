@@ -13,13 +13,19 @@ const orderItemSchema = new mongoose.Schema(
 const orderSchema = new mongoose.Schema(
   {
     orderNumber: { type: String, required: true, unique: true, index: true },
-    userId: { type: mongoose.Schema.Types.ObjectId, ref: 'User', required: true, index: true },
+    userId: { type: mongoose.Schema.Types.ObjectId, ref: 'User', index: true },
     guestName: { type: String }, // for guest orders without account
     items: { type: [orderItemSchema], required: true },
     subtotal: { type: Number, required: true },
     discount: { type: Number, default: 0 },
     totalAmount: { type: Number, required: true },
     paymentMethod: { type: String, enum: ['UPI', 'WALLET'], required: true },
+    orderType: {
+      type: String,
+      enum: ['READY_FOOD', 'MADE_TO_ORDER'],
+      default: 'MADE_TO_ORDER',
+      index: true,
+    },
     paymentStatus: {
       type: String,
       enum: ['PENDING', 'PAID', 'FAILED', 'REFUNDED'],
@@ -33,6 +39,7 @@ const orderSchema = new mongoose.Schema(
       index: true,
     },
     qrTokenHash: { type: String },
+    qrImage: { type: String }, // Base64 data URL for persistent display across devices
     qrExpiresAt: { type: Date },
     qrIsActive: { type: Boolean, default: false },
     deliveryPin: { type: String }, // optional 4-6 digit pin

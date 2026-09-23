@@ -15,8 +15,8 @@ const createOrder = async (req, res, next) => {
     if (!Array.isArray(items) || items.length === 0) {
       return res.status(400).json({ message: 'Order must include at least one item' });
     }
-    if (!['UPI', 'WALLET'].includes(paymentMethod)) {
-      return res.status(400).json({ message: 'paymentMethod must be UPI or WALLET' });
+    if (!['UPI', 'WALLET', 'RAZORPAY'].includes(paymentMethod)) {
+      return res.status(400).json({ message: 'paymentMethod must be UPI, WALLET, or RAZORPAY' });
     }
     if (!req.user && !guestName) {
       return res.status(400).json({ message: 'Guest orders require a guestName' });
@@ -27,6 +27,7 @@ const createOrder = async (req, res, next) => {
 
     let subtotal = 0;
     const orderItems = [];
+    let allReadyFood = true;
 
     for (const line of items) {
       const menuItem = await MenuItem.findById(line.menuItemId);
@@ -42,6 +43,15 @@ const createOrder = async (req, res, next) => {
       }
       const lineTotal = menuItem.price * qty;
       subtotal += lineTotal;
+
+      const isReady = menuItem.preparationType === 'READY_FOOD' ||
+        ['Beverages', 'Snacks', 'Desserts'].includes(menuItem.category) ||
+        (menuItem.preparationTime && menuItem.preparationTime <= 5);
+
+      if (!isReady) {
+        allReadyFood = false;
+      }
+
       orderItems.push({
         menuItem: menuItem._id,
         name: menuItem.name,
@@ -61,6 +71,7 @@ const createOrder = async (req, res, next) => {
       discount: 0,
       totalAmount,
       paymentMethod,
+      orderType: allReadyFood ? 'READY_FOOD' : 'MADE_TO_ORDER',
       paymentStatus: 'PENDING',
       orderStatus: 'PLACED',
     });
@@ -89,7 +100,9 @@ const getOrderById = async (req, res, next) => {
 
     const isOwner = order.userId && req.user && order.userId.toString() === req.user._id.toString();
     const isStaffOrAbove = req.user && ['staff', 'manager', 'admin'].includes(req.user.role);
-    if (!isOwner && !isStaffOrAbove) {
+    const isGuestOrder = !order.userId;
+
+    if (!isOwner && !isStaffOrAbove && !isGuestOrder) {
       return res.status(403).json({ message: 'Not authorized to view this order' });
     }
 

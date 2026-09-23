@@ -25,7 +25,14 @@ const OrderHistory = () => {
               </div>
               <div className="text-right">
                 <p className="font-semibold text-neutral-900">₹{o.totalAmount}</p>
-                <span className={`status-badge status-${o.orderStatus}`}>{o.orderStatus}</span>
+                <div className="flex items-center justify-end gap-1.5 mt-1">
+                  {o.orderStatus !== 'DELIVERED' && o.orderStatus !== 'CLOSED' && o.orderStatus !== 'CANCELLED' && (
+                    <span className="text-[11px] font-semibold text-brand-600 bg-brand-50 px-2 py-0.5 rounded-full">
+                      View QR Pass →
+                    </span>
+                  )}
+                  <span className={`status-badge status-${o.orderStatus}`}>{o.orderStatus}</span>
+                </div>
               </div>
             </Link>
           ))}

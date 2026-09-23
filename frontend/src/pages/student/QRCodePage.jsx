@@ -20,18 +20,25 @@ const QRCodePage = () => {
       setQrImage(parsed.qrImage);
       setOrder(parsed.order);
     } else {
-      // Fallback: QR image is only issued once at payment time, so if the page was
-      // refreshed we just show order status instead of trying to regenerate it.
-      api.get(`/orders/${orderId}`).then(({ data }) => setOrder(data.order));
+      api.get(`/orders/${orderId}`).then(({ data }) => {
+        setOrder(data.order);
+        if (data.order?.qrImage) {
+          setQrImage(data.order.qrImage);
+        }
+      });
     }
   }, [orderId]);
 
   if (!order) return <div className="max-w-sm mx-auto px-4 py-16 text-center text-neutral-400">Loading order…</div>;
 
+  const isReady = order.orderStatus === 'READY';
+
   return (
     <div className="max-w-sm mx-auto px-4 py-12 text-center">
       <CheckCircle2 className="text-emerald-500 mx-auto mb-3" size={40} />
-      <h1 className="text-xl font-bold text-neutral-900">Order Confirmed!</h1>
+      <h1 className="text-xl font-bold text-neutral-900">
+        {isReady ? 'Ready for Pickup!' : 'Order Confirmed!'}
+      </h1>
       <p className="text-neutral-500 text-sm mt-1">Order #{order.orderNumber}</p>
 
       {qrImage ? (

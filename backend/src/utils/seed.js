@@ -18,15 +18,15 @@ const demoUsers = [
 ];
 
 const demoMenu = [
-  { name: 'Masala Dosa', category: 'Breakfast', price: 45, availableQuantity: 30, preparationTime: 12, description: 'Crispy rice crepe with spiced potato filling' },
-  { name: 'Idli Sambar (2 pcs)', category: 'Breakfast', price: 35, availableQuantity: 40, preparationTime: 8, description: 'Steamed rice cakes with lentil sambar' },
-  { name: 'Veg Thali', category: 'Lunch', price: 90, availableQuantity: 25, preparationTime: 15, description: 'Rice, dal, two curries, roti, salad' },
-  { name: 'Chicken Biryani', category: 'Lunch', price: 130, availableQuantity: 20, preparationTime: 18, description: 'Hyderabadi-style dum biryani' },
-  { name: 'Samosa (2 pcs)', category: 'Snacks', price: 20, availableQuantity: 60, preparationTime: 5, description: 'Crispy fried pastry with spiced potato' },
-  { name: 'Veg Sandwich', category: 'Snacks', price: 40, availableQuantity: 35, preparationTime: 7, description: 'Grilled sandwich with veggies and chutney' },
-  { name: 'Masala Chai', category: 'Beverages', price: 15, availableQuantity: 100, preparationTime: 4, description: 'Spiced Indian tea' },
-  { name: 'Cold Coffee', category: 'Beverages', price: 40, availableQuantity: 50, preparationTime: 5, description: 'Iced coffee with milk' },
-  { name: 'Gulab Jamun (2 pcs)', category: 'Desserts', price: 30, availableQuantity: 40, preparationTime: 3, description: 'Sweet milk-solid dumplings in syrup' },
+  { name: 'Masala Dosa', category: 'Breakfast', price: 45, availableQuantity: 30, preparationTime: 12, preparationType: 'MADE_TO_ORDER', description: 'Crispy rice crepe with spiced potato filling' },
+  { name: 'Idli Sambar (2 pcs)', category: 'Breakfast', price: 35, availableQuantity: 40, preparationTime: 8, preparationType: 'MADE_TO_ORDER', description: 'Steamed rice cakes with lentil sambar' },
+  { name: 'Veg Thali', category: 'Lunch', price: 90, availableQuantity: 25, preparationTime: 15, preparationType: 'MADE_TO_ORDER', description: 'Rice, dal, two curries, roti, salad' },
+  { name: 'Chicken Biryani', category: 'Lunch', price: 130, availableQuantity: 20, preparationTime: 18, preparationType: 'MADE_TO_ORDER', description: 'Hyderabadi-style dum biryani' },
+  { name: 'Samosa (2 pcs)', category: 'Snacks', price: 20, availableQuantity: 60, preparationTime: 2, preparationType: 'READY_FOOD', description: 'Crispy fried pastry with spiced potato (Ready at counter)' },
+  { name: 'Veg Sandwich', category: 'Snacks', price: 40, availableQuantity: 35, preparationTime: 3, preparationType: 'READY_FOOD', description: 'Grilled sandwich with veggies and chutney (Ready at counter)' },
+  { name: 'Masala Chai', category: 'Beverages', price: 15, availableQuantity: 100, preparationTime: 1, preparationType: 'READY_FOOD', description: 'Spiced Indian tea (Ready at counter)' },
+  { name: 'Cold Coffee', category: 'Beverages', price: 40, availableQuantity: 50, preparationTime: 1, preparationType: 'READY_FOOD', description: 'Iced coffee with milk (Ready at counter)' },
+  { name: 'Gulab Jamun (2 pcs)', category: 'Desserts', price: 30, availableQuantity: 40, preparationTime: 1, preparationType: 'READY_FOOD', description: 'Sweet milk-solid dumplings in syrup (Ready at counter)' },
 ];
 
 const run = async () => {

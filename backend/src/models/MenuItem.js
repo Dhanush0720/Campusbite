@@ -15,6 +15,11 @@ const menuItemSchema = new mongoose.Schema(
     availableQuantity: { type: Number, required: true, min: 0, default: 0 },
     isAvailable: { type: Boolean, default: true },
     preparationTime: { type: Number, default: 10 }, // minutes
+    preparationType: {
+      type: String,
+      enum: ['READY_FOOD', 'MADE_TO_ORDER'],
+      default: 'MADE_TO_ORDER',
+    },
     createdBy: { type: mongoose.Schema.Types.ObjectId, ref: 'User' },
   },
   { timestamps: true }

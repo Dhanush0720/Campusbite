@@ -68,10 +68,8 @@ const deliverOrder = async (req, res, next) => {
     if (!order.qrIsActive) {
       return res.status(409).json({ message: 'QR/PIN is not active for this order' });
     }
-    if (order.orderStatus !== 'READY') {
-      return res.status(409).json({
-        message: `Order must be READY before handover (currently ${order.orderStatus})`,
-      });
+    if (order.orderStatus === 'CANCELLED') {
+      return res.status(409).json({ message: 'Order was cancelled' });
     }
 
     order.orderStatus = 'DELIVERED';

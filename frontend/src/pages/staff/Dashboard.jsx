@@ -57,7 +57,14 @@ const StaffDashboard = () => {
               {list.length === 0 && <p className="text-xs text-neutral-400">No orders here.</p>}
               {list.map((o) => (
                 <div key={o._id} className="border border-neutral-200 rounded-lg p-3">
-                  <p className="font-medium text-sm text-neutral-900">#{o.orderNumber}</p>
+                  <div className="flex items-center justify-between">
+                    <p className="font-medium text-sm text-neutral-900">#{o.orderNumber}</p>
+                    {o.orderType === 'READY_FOOD' ? (
+                      <span className="text-[10px] bg-amber-100 text-amber-800 px-1.5 py-0.5 rounded font-medium">⚡ Ready Food</span>
+                    ) : (
+                      <span className="text-[10px] bg-blue-100 text-blue-800 px-1.5 py-0.5 rounded font-medium">🍳 Kitchen</span>
+                    )}
+                  </div>
                   <p className="text-xs text-neutral-500 mt-1">
                     {o.items.map((i) => `${i.name} ×${i.quantity}`).join(', ')}
                   </p>

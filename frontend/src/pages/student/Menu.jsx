@@ -84,7 +84,20 @@ const Menu = () => {
                     {item.image ? <img src={item.image} alt={item.name} className="w-full h-full object-cover" /> : 'No image'}
                   </div>
                   <div className="flex items-start justify-between gap-2">
-                    <h3 className="font-semibold text-neutral-900">{item.name}</h3>
+                    <div>
+                      <h3 className="font-semibold text-neutral-900">{item.name}</h3>
+                      <div className="mt-1">
+                        {(item.preparationType === 'READY_FOOD' || ['Beverages', 'Snacks', 'Desserts'].includes(item.category)) ? (
+                          <span className="text-[10px] font-medium bg-amber-50 text-amber-700 border border-amber-200 px-1.5 py-0.5 rounded-md inline-block">
+                            ⚡ Instant Counter Pickup
+                          </span>
+                        ) : (
+                          <span className="text-[10px] font-medium bg-blue-50 text-blue-700 border border-blue-200 px-1.5 py-0.5 rounded-md inline-block">
+                            🍳 Fresh Made · ~{item.preparationTime || 10}m
+                          </span>
+                        )}
+                      </div>
+                    </div>
                     <span className="text-brand-700 font-semibold whitespace-nowrap">₹{item.price}</span>
                   </div>
                   <p className="text-xs text-neutral-500 mt-1 line-clamp-2">{item.description}</p>

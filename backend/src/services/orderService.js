@@ -27,39 +27,43 @@ const finalizePaidOrder = async (order, session) => {
 
   const { rawToken, tokenHash } = generateQrToken();
   const qrExpiresAt = new Date(Date.now() + 1000 * 60 * 60 * 6); // 6 hour validity
+  const qrImageDataUrl = await QRCode.toDataURL(rawToken);
 
   order.paymentStatus = 'PAID';
-  order.orderStatus = 'CONFIRMED';
+  // If the order is composed of already prepared food, skip cooking queue and set to READY immediately!
+  order.orderStatus = order.orderType === 'READY_FOOD' ? 'READY' : 'CONFIRMED';
   order.qrTokenHash = tokenHash;
+  order.qrImage = qrImageDataUrl;
   order.qrExpiresAt = qrExpiresAt;
   order.qrIsActive = true;
   order.deliveryPin = generateDeliveryPin();
   await order.save({ session });
 
-  await AuditLog.create(
-    [{
-      actorId: order.userId,
-      action: 'ORDER_PAID_CONFIRMED',
-      entityType: 'Order',
-      entityId: order._id,
-      metadata: { orderNumber: order.orderNumber, totalAmount: order.totalAmount },
-    }],
-    { session }
-  );
+  if (order.userId) {
+    await AuditLog.create(
+      [{
+        actorId: order.userId,
+        action: order.orderStatus === 'READY' ? 'ORDER_PAID_READY' : 'ORDER_PAID_CONFIRMED',
+        entityType: 'Order',
+        entityId: order._id,
+        metadata: { orderNumber: order.orderNumber, totalAmount: order.totalAmount },
+      }],
+      { session }
+    );
 
-  await Notification.create(
-    [{
-      userId: order.userId,
-      title: 'Order confirmed',
-      message: `Your order ${order.orderNumber} is confirmed. Show your QR code at the counter.`,
-      type: 'ORDER',
-      referenceOrderId: order._id,
-    }],
-    { session }
-  );
-
-  // Fire-and-forget: real-time notifications (do not block the transaction on socket errors)
-  const qrImageDataUrl = await QRCode.toDataURL(rawToken);
+    await Notification.create(
+      [{
+        userId: order.userId,
+        title: order.orderStatus === 'READY' ? 'Order ready for pickup!' : 'Order confirmed',
+        message: order.orderStatus === 'READY'
+          ? `Your order ${order.orderNumber} is ready! Show your QR code at the counter for instant handover.`
+          : `Your order ${order.orderNumber} is confirmed. Kitchen is preparing your food.`,
+        type: 'ORDER',
+        referenceOrderId: order._id,
+      }],
+      { session }
+    );
+  }
 
   return { rawToken, qrImageDataUrl };
 };
