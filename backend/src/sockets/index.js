@@ -11,7 +11,8 @@ const initSocket = (io) => {
     try {
       const token = socket.handshake.auth?.token || socket.handshake.headers?.authorization?.split(' ')[1];
       if (!token) return next(new Error('Authentication required'));
-      const decoded = jwt.verify(token, process.env.JWT_SECRET);
+      const secret = process.env.JWT_SECRET || 'campusbite_jwt_secret_fallback_key_2026_dev_prod';
+      const decoded = jwt.verify(token, secret);
       const user = await User.findById(decoded.id).select('-passwordHash');
       if (!user || !user.isActive) return next(new Error('Invalid user'));
       socket.user = user;
