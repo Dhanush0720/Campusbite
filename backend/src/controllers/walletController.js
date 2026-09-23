@@ -100,8 +100,18 @@ const verifyUpiTopUp = async (req, res, next) => {
       return res.status(400).json({ message: 'Missing referenceId' });
     }
 
-    const cleanUtr = utrNumber ? String(utrNumber).trim() : null;
-    const idempotencyKey = cleanUtr ? `topup:utr:${cleanUtr}` : `topup:${referenceId}`;
+    const cleanUtr = utrNumber ? String(utrNumber).trim() : '';
+    if (!cleanUtr || cleanUtr.length < 8) {
+      return res.status(400).json({ message: 'Valid 12-digit UPI Reference (UTR) number is mandatory to verify wallet top-up.' });
+    }
+
+    // Check if this UTR has already been redeemed for wallet top-up
+    const duplicateTxn = await WalletTransaction.findOne({ idempotencyKey: `topup:utr:${cleanUtr}` });
+    if (duplicateTxn) {
+      return res.status(400).json({ message: 'This UTR has already been redeemed for a wallet recharge.' });
+    }
+
+    const idempotencyKey = `topup:utr:${cleanUtr}`;
 
     const session = await mongoose.startSession();
     let txn;
@@ -111,7 +121,7 @@ const verifyUpiTopUp = async (req, res, next) => {
           {
             userId: req.user._id,
             amount: numAmount,
-            note: cleanUtr ? `Recharge via UPI (UTR: ${cleanUtr})` : `Recharge via UPI (${referenceId})`,
+            note: `Recharge via UPI (UTR: ${cleanUtr})`,
             idempotencyKey,
           },
           session

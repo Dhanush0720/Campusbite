@@ -53,7 +53,7 @@ const Checkout = () => {
       if (isGuest) payload.guestName = guestName.trim() || 'Guest';
 
       const { data } = await api.post('/orders', payload);
-      clearCart();
+      // Cart will be cleared upon successful payment verification in Payment.jsx
       navigate(`${base}/payment/${data.order._id}`, { state: { method } });
     } catch (err) {
       setError(err.response?.data?.message || 'Could not place order');

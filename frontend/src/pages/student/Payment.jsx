@@ -2,11 +2,13 @@ import React, { useEffect, useState } from 'react';
 import { useParams, useLocation, useNavigate } from 'react-router-dom';
 import { Loader2, IndianRupee, Copy, Check, ExternalLink, ShieldCheck, Smartphone, QrCode } from 'lucide-react';
 import api from '../../api/axios';
+import { useCart } from '../../context/CartContext';
 
 const Payment = () => {
   const { orderId } = useParams();
   const location = useLocation();
   const navigate = useNavigate();
+  const { clearCart } = useCart();
   const isGuest = location.pathname.startsWith('/guest');
   const base = isGuest ? '/guest' : '/student';
   const method = location.state?.method || 'UPI';
@@ -43,6 +45,7 @@ const Payment = () => {
             razorpay_payment_id: response.razorpay_payment_id,
             razorpay_signature: response.razorpay_signature,
           });
+          clearCart(); // Clear cart only when payment is verified
           sessionStorage.setItem(`qr:${orderId}`, JSON.stringify({ qrImage: data.qrImage, order: data.order }));
           navigate(`${base}/qr/${orderId}`, { replace: true });
         } catch (err) {
@@ -71,17 +74,19 @@ const Payment = () => {
       try {
         const { data } = await api.post('/payments/create', { orderId, method });
         if (method === 'WALLET') {
+          clearCart(); // Clear cart on instant wallet payment
           sessionStorage.setItem(`qr:${orderId}`, JSON.stringify({ qrImage: data.qrImage, order: data.order }));
           setStatus('done');
           navigate(`${base}/qr/${orderId}`, { replace: true });
-        } else if (data.razorpay) {
+        } else if (method === 'RAZORPAY' && data.razorpay) {
           setRazorpayData(data.razorpay);
           setProviderReference(data.payment.providerReference);
           setStatus('awaiting-razorpay');
           launchRazorpay(data.razorpay);
         } else {
+          // Direct UPI QR (Default & 0% fee)
           setUpiIntent(data.upiIntent);
-          setProviderReference(data.payment.providerReference);
+          setProviderReference(data.payment?.providerReference || data.upiIntent?.reference);
           setStatus('awaiting-upi');
         }
       } catch (err) {
@@ -102,14 +107,25 @@ const Payment = () => {
   };
 
   const handleVerifyUpi = async () => {
+    const cleanUtr = utrNumber.trim();
+    if (!cleanUtr) {
+      setError('Please enter the 12-digit UPI Reference / UTR Number from your payment receipt.');
+      return;
+    }
+    if (cleanUtr.length < 8) {
+      setError('Please enter a valid UPI Reference / UTR Number (at least 8-12 digits).');
+      return;
+    }
+
     setStatus('verifying');
     setError('');
     try {
       const { data } = await api.post('/payments/verify', {
         orderId,
         providerReference,
-        utrNumber: utrNumber.trim() || undefined,
+        utrNumber: cleanUtr,
       });
+      clearCart(); // Clear cart on successful UPI payment
       sessionStorage.setItem(`qr:${orderId}`, JSON.stringify({ qrImage: data.qrImage, order: data.order }));
       navigate(`${base}/qr/${orderId}`, { replace: true });
     } catch (err) {
@@ -133,8 +149,8 @@ const Payment = () => {
         <div className="bg-red-50 text-red-700 p-4 rounded-xl border border-red-200 mb-5 text-sm font-medium">
           {error}
         </div>
-        <button onClick={() => navigate(-1)} className="btn-secondary text-sm">
-          Go Back
+        <button onClick={() => navigate(isGuest ? '/guest/cart' : '/student/cart')} className="btn-secondary text-sm">
+          Return to Cart
         </button>
       </div>
     );
@@ -234,21 +250,32 @@ const Payment = () => {
         )}
 
         {/* UTR Input */}
-        <div className="text-left pt-2 border-t border-neutral-100">
-          <label htmlFor="utrInput" className="block text-xs font-semibold text-neutral-700 mb-1">
-            UPI Reference / UTR Number <span className="text-neutral-400 font-normal">(Optional)</span>
+        <div className="text-left pt-3 border-t border-neutral-100">
+          <label htmlFor="utrInput" className="flex items-center justify-between text-xs font-bold text-neutral-800 mb-1.5">
+            <span>UPI Reference / UTR Number</span>
+            <span className="text-[10px] font-bold uppercase tracking-wider text-rose-600 bg-rose-50 border border-rose-200 px-2 py-0.5 rounded-md">
+              * Mandatory
+            </span>
           </label>
           <input
             id="utrInput"
             type="text"
             value={utrNumber}
-            onChange={(e) => setUtrNumber(e.target.value)}
-            placeholder="12-digit UTR from your UPI payment receipt"
-            maxLength={18}
-            className="w-full px-3 py-2 border border-neutral-300 rounded-lg text-sm font-mono focus:outline-none focus:ring-2 focus:ring-brand-500 focus:border-brand-500"
+            onChange={(e) => {
+              setUtrNumber(e.target.value);
+              if (error) setError('');
+            }}
+            placeholder="e.g. 426819203847 (12-digit UTR)"
+            maxLength={22}
+            required
+            className={`w-full px-3 py-2 border rounded-lg text-sm font-mono focus:outline-none focus:ring-2 ${
+              !utrNumber.trim()
+                ? 'border-neutral-300 focus:border-brand-500 focus:ring-brand-500'
+                : 'border-emerald-500/60 bg-emerald-50/20 focus:ring-emerald-500'
+            }`}
           />
-          <p className="text-[11px] text-neutral-400 mt-1">
-            Found on your GPay, PhonePe, or Paytm receipt after paying.
+          <p className="text-[11px] text-neutral-500 mt-1">
+            Required for verification. Find the 12-digit UTR / UPI Ref ID on your GPay, PhonePe, or Paytm receipt.
           </p>
         </div>
       </div>
@@ -282,6 +309,16 @@ const Payment = () => {
       <div className="mt-4 flex items-center justify-center gap-2 text-xs text-neutral-400">
         <ShieldCheck size={14} className="text-emerald-500" />
         <span>Direct Bank Settlement · Campus Safe</span>
+      </div>
+
+      <div className="mt-3 text-center">
+        <button
+          type="button"
+          onClick={() => navigate(isGuest ? '/guest/cart' : '/student/cart')}
+          className="text-xs text-neutral-400 hover:text-neutral-700 font-medium underline"
+        >
+          Cancel & Return to Cart
+        </button>
       </div>
     </div>
   );

@@ -92,42 +92,48 @@ const createPayment = async (req, res, next) => {
     return;
   }
 
-  if (method === 'UPI' || method === 'RAZORPAY') {
+  if (method === 'RAZORPAY') {
     try {
       const rzp = getRazorpayInstance();
-
-      // If Razorpay keys are configured, create real Razorpay Order
-      if (rzp) {
-        const rzpOrder = await rzp.orders.create({
-          amount: Math.round(order.totalAmount * 100), // amount in paise
-          currency: 'INR',
-          receipt: `order_${order.orderNumber}`,
-          notes: { orderId: order._id.toString() },
-        });
-
-        const payment = await Payment.create({
-          orderId: order._id,
-          userId: req.user ? req.user._id : undefined,
-          method: 'UPI',
-          amount: order.totalAmount,
-          provider: 'razorpay',
-          providerReference: rzpOrder.id,
-          idempotencyKey: rzpOrder.id,
-          status: 'PENDING',
-        });
-
-        return res.status(201).json({
-          payment,
-          razorpay: {
-            orderId: rzpOrder.id,
-            amount: rzpOrder.amount,
-            currency: rzpOrder.currency,
-            key: process.env.RAZORPAY_KEY_ID,
-          },
-        });
+      if (!rzp) {
+        return res.status(400).json({ message: 'Razorpay is not configured. Please choose Direct UPI.' });
       }
 
-      // Fall back to Direct Dynamic UPI / Sandbox Intent
+      const rzpOrder = await rzp.orders.create({
+        amount: Math.round(order.totalAmount * 100), // amount in paise
+        currency: 'INR',
+        receipt: `order_${order.orderNumber}`,
+        notes: { orderId: order._id.toString() },
+      });
+
+      const payment = await Payment.create({
+        orderId: order._id,
+        userId: req.user ? req.user._id : undefined,
+        method: 'RAZORPAY',
+        amount: order.totalAmount,
+        provider: 'razorpay',
+        providerReference: rzpOrder.id,
+        idempotencyKey: rzpOrder.id,
+        status: 'PENDING',
+      });
+
+      return res.status(201).json({
+        payment,
+        razorpay: {
+          orderId: rzpOrder.id,
+          amount: rzpOrder.amount,
+          currency: rzpOrder.currency,
+          key: process.env.RAZORPAY_KEY_ID,
+        },
+      });
+    } catch (err) {
+      return next(err);
+    }
+  }
+
+  if (method === 'UPI') {
+    try {
+      // Direct Dynamic UPI QR
       const idempotencyKey = `order:${order._id}:upi:${uuidv4()}`;
       const payment = await Payment.create({
         orderId: order._id,
@@ -192,6 +198,19 @@ const verifyPayment = async (req, res, next) => {
   const payment = await Payment.findOne({ orderId: order._id, providerReference: lookupRef, status: 'PENDING' });
   if (!payment) {
     return res.status(404).json({ message: 'No pending payment found for this reference' });
+  }
+
+  // If method is UPI, UTR entry is mandatory
+  if (payment.method === 'UPI') {
+    const cleanUtr = utrNumber ? String(utrNumber).trim() : '';
+    if (!cleanUtr || cleanUtr.length < 8) {
+      return res.status(400).json({ message: 'Valid 12-digit UPI Reference / UTR number is mandatory to verify payment.' });
+    }
+
+    const duplicatePayment = await Payment.findOne({ utrNumber: cleanUtr, status: 'SUCCESS' });
+    if (duplicatePayment && duplicatePayment.orderId.toString() !== order._id.toString()) {
+      return res.status(400).json({ message: 'This UTR has already been submitted for another order.' });
+    }
   }
 
   // If Razorpay signature is sent, verify HMAC SHA-256

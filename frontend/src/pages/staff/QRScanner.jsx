@@ -1,10 +1,11 @@
 import React, { useEffect, useRef, useState } from 'react';
-import { ScanLine, CheckCircle2, XCircle, Camera, Keyboard, RefreshCw } from 'lucide-react';
+import { ScanLine, CheckCircle2, XCircle, Camera, Keyboard, RefreshCw, SwitchCamera } from 'lucide-react';
 import { Html5Qrcode } from 'html5-qrcode';
 import api from '../../api/axios';
 
 const QRScanner = () => {
   const [mode, setMode] = useState('camera'); // 'camera' | 'manual'
+  const [facingMode, setFacingMode] = useState('environment'); // 'environment' | 'user'
   const [cameraActive, setCameraActive] = useState(false);
   const [cameraError, setCameraError] = useState('');
   const [qrToken, setQrToken] = useState('');
@@ -41,7 +42,7 @@ const QRScanner = () => {
       setError(err.response?.data?.message || 'Verification failed');
       // If camera was scanning and token was invalid, restart camera after 2s
       if (mode === 'camera' && scannerRef.current) {
-        setTimeout(() => startCamera(), 1500);
+        setTimeout(() => startCamera(facingMode), 1500);
       }
     } finally {
       setBusy(false);
@@ -58,12 +59,15 @@ const QRScanner = () => {
     await verifyPayload(payload);
   };
 
-  const startCamera = async () => {
+  const startCamera = async (currentFacingMode = facingMode) => {
     setCameraError('');
     try {
       if (scannerRef.current) {
         try {
-          await scannerRef.current.stop();
+          if (scannerRef.current.isScanning) {
+            await scannerRef.current.stop();
+          }
+          await scannerRef.current.clear();
         } catch (e) {
           // ignore
         }
@@ -73,10 +77,15 @@ const QRScanner = () => {
       scannerRef.current = html5QrCode;
 
       await html5QrCode.start(
-        { facingMode: 'environment' }, // uses back camera on mobile phones
+        { facingMode: currentFacingMode },
         {
-          fps: 15,
-          qrbox: { width: 250, height: 250 },
+          fps: 20,
+          aspectRatio: 1.0,
+          qrbox: (viewfinderWidth, viewfinderHeight) => {
+            const minEdge = Math.min(viewfinderWidth, viewfinderHeight);
+            const edgeSize = Math.max(180, Math.floor(minEdge * 0.75));
+            return { width: edgeSize, height: edgeSize };
+          },
         },
         async (decodedText) => {
           // Success! Stop camera and verify
@@ -115,9 +124,13 @@ const QRScanner = () => {
     }
   };
 
+  const toggleCamera = () => {
+    setFacingMode((prev) => (prev === 'environment' ? 'user' : 'environment'));
+  };
+
   useEffect(() => {
     if (mode === 'camera' && !order) {
-      startCamera();
+      startCamera(facingMode);
     } else {
       stopCamera();
     }
@@ -125,7 +138,7 @@ const QRScanner = () => {
       stopCamera();
     };
     // eslint-disable-next-line react-hooks/exhaustive-deps
-  }, [mode, order]);
+  }, [mode, order, facingMode]);
 
   const handleDeliver = async () => {
     setBusy(true);
@@ -156,7 +169,7 @@ const QRScanner = () => {
       <p className="text-neutral-500 text-sm mb-6">Scan student QR code or enter Order # + PIN for instant handover.</p>
 
       {!order && (
-        <div className="card overflow-hidden mb-6">
+        <div className="card overflow-hidden mb-6 shadow-sm border border-neutral-200">
           {/* Tabs */}
           <div className="grid grid-cols-2 border-b border-neutral-200">
             <button
@@ -180,24 +193,58 @@ const QRScanner = () => {
           {/* Mode 1: Camera Scanner */}
           {mode === 'camera' && (
             <div className="p-4 text-center">
-              <div
-                id="qr-camera-feed"
-                className="w-full aspect-square bg-neutral-900 rounded-lg overflow-hidden relative mx-auto max-w-[320px]"
-              />
+              {/* Outer Viewport Container with Reticle */}
+              <div className="relative w-full aspect-square bg-slate-950 rounded-2xl overflow-hidden mx-auto max-w-[320px] shadow-lg border border-neutral-800">
+                {/* HTML5 Camera Stream */}
+                <div id="qr-camera-feed" className="w-full h-full" />
+
+                {/* Animated Laser Scanning Line */}
+                {cameraActive && !busy && <div className="laser-line" />}
+
+                {/* 4 Glowing Corner Reticles */}
+                <div className="absolute inset-4 pointer-events-none z-10 flex flex-col justify-between">
+                  <div className="flex justify-between">
+                    <div className="w-8 h-8 border-t-4 border-l-4 border-brand-500 rounded-tl-xl shadow-[0_0_10px_rgba(234,88,12,0.9)]" />
+                    <div className="w-8 h-8 border-t-4 border-r-4 border-brand-500 rounded-tr-xl shadow-[0_0_10px_rgba(234,88,12,0.9)]" />
+                  </div>
+                  <div className="flex justify-between">
+                    <div className="w-8 h-8 border-b-4 border-l-4 border-brand-500 rounded-bl-xl shadow-[0_0_10px_rgba(234,88,12,0.9)]" />
+                    <div className="w-8 h-8 border-b-4 border-r-4 border-brand-500 rounded-br-xl shadow-[0_0_10px_rgba(234,88,12,0.9)]" />
+                  </div>
+                </div>
+
+                {/* Top Badge: Aim Indicator */}
+                <div className="absolute top-3 left-1/2 -translate-x-1/2 z-20 px-3 py-1 rounded-full bg-black/60 backdrop-blur-md text-[11px] font-bold text-white flex items-center gap-1.5 shadow-sm whitespace-nowrap">
+                  <span className="w-2 h-2 rounded-full bg-emerald-400 animate-pulse" />
+                  <span>Aim at Student QR</span>
+                </div>
+
+                {/* Bottom Control: Flip Camera (Front/Back) */}
+                <div className="absolute bottom-3 right-3 z-20">
+                  <button
+                    type="button"
+                    onClick={toggleCamera}
+                    className="p-2 rounded-xl bg-black/60 hover:bg-black/80 text-white backdrop-blur-md shadow-md transition-all active:scale-95 flex items-center gap-1 text-xs font-semibold"
+                    title="Flip Camera"
+                  >
+                    <SwitchCamera size={16} />
+                  </button>
+                </div>
+              </div>
 
               {busy && (
-                <div className="mt-3 text-sm font-medium text-brand-600 flex items-center justify-center gap-2">
+                <div className="mt-3 text-sm font-bold text-brand-600 flex items-center justify-center gap-2">
                   <RefreshCw className="animate-spin" size={16} /> Verifying scanned QR…
                 </div>
               )}
 
               {cameraError && (
-                <div className="mt-3 p-3 bg-amber-50 text-amber-800 text-xs rounded-lg text-left">
+                <div className="mt-3 p-3 bg-amber-50 text-amber-800 text-xs rounded-xl text-left border border-amber-200">
                   <p className="font-semibold mb-1">Camera Notice:</p>
                   <p>{cameraError}</p>
                   <button
                     onClick={() => setMode('manual')}
-                    className="mt-2 btn-secondary text-xs w-full py-1.5"
+                    className="mt-2 btn-secondary text-xs w-full py-2 font-bold"
                   >
                     Switch to Manual PIN Entry
                   </button>
@@ -205,13 +252,14 @@ const QRScanner = () => {
               )}
 
               {error && (
-                <div className="mt-3 p-2.5 bg-red-50 text-red-700 text-xs rounded-lg flex items-center gap-2">
-                  <XCircle size={15} /> {error}
+                <div className="mt-3 p-3 bg-red-50 text-red-700 text-xs rounded-xl flex items-center gap-2 border border-red-200 font-medium">
+                  <XCircle size={16} className="shrink-0 text-red-500" />
+                  <span>{error}</span>
                 </div>
               )}
 
-              <p className="text-xs text-neutral-400 mt-3">
-                Hold the student's pickup QR code steady in front of the camera.
+              <p className="text-xs text-neutral-400 mt-3 font-medium">
+                Hold the student's pickup QR code steady inside the frame.
               </p>
             </div>
           )}

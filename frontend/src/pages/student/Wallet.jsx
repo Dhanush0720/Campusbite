@@ -140,16 +140,27 @@ const Wallet = () => {
   // Verify / Confirm UPI Top-Up
   const handleVerifyUpiTopUp = async () => {
     if (!upiModal) return;
+    const cleanUtr = utrNumber.trim();
+    if (!cleanUtr) {
+      setError('Please enter the 12-digit UPI Reference / UTR Number from your payment receipt.');
+      return;
+    }
+    if (cleanUtr.length < 8) {
+      setError('Please enter a valid UPI Reference / UTR Number (at least 8-12 digits).');
+      return;
+    }
+
     setVerifyingUpi(true);
     setError('');
     try {
       await api.post('/wallet/topup/upi/verify', {
         amount: upiModal.amount,
         referenceId: upiModal.referenceId,
-        utrNumber: utrNumber.trim() || undefined,
+        utrNumber: cleanUtr,
       });
       setSuccessMsg(`🎉 ₹${upiModal.amount} credited to your Campus Wallet!`);
       setUpiModal(null);
+      setUtrNumber('');
       await load();
     } catch (err) {
       setError(err.response?.data?.message || 'Top-up verification failed');
@@ -369,18 +380,32 @@ const Wallet = () => {
 
             {/* UTR Input */}
             <div className="mb-4 text-left">
-              <label htmlFor="topupUtrInput" className="block text-[11px] font-semibold text-neutral-700 mb-1">
-                UPI Reference / UTR Number <span className="text-neutral-400 font-normal">(Optional)</span>
+              <label htmlFor="topupUtrInput" className="flex items-center justify-between text-[11px] font-bold text-neutral-800 mb-1">
+                <span>UPI Reference / UTR Number</span>
+                <span className="text-[10px] font-bold uppercase tracking-wider text-rose-600 bg-rose-50 border border-rose-200 px-1.5 py-0.2 rounded">
+                  * Mandatory
+                </span>
               </label>
               <input
                 id="topupUtrInput"
                 type="text"
                 value={utrNumber}
-                onChange={(e) => setUtrNumber(e.target.value)}
-                placeholder="12-digit UTR from payment receipt"
-                maxLength={18}
-                className="w-full px-3 py-1.5 border border-neutral-300 rounded-lg text-xs font-mono focus:outline-none focus:ring-1 focus:ring-brand-500"
+                onChange={(e) => {
+                  setUtrNumber(e.target.value);
+                  if (error) setError('');
+                }}
+                placeholder="e.g. 426819203847 (12-digit UTR)"
+                maxLength={22}
+                required
+                className={`w-full px-3 py-2 border rounded-lg text-xs font-mono focus:outline-none focus:ring-1 ${
+                  !utrNumber.trim()
+                    ? 'border-neutral-300 focus:border-brand-500 focus:ring-brand-500'
+                    : 'border-emerald-500/60 bg-emerald-50/20 focus:ring-emerald-500'
+                }`}
               />
+              <p className="text-[10px] text-neutral-400 mt-1">
+                Enter the 12-digit UTR number from your UPI receipt to credit wallet.
+              </p>
             </div>
 
             <div className="flex gap-2">

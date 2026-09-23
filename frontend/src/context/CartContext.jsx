@@ -1,9 +1,25 @@
-import React, { createContext, useContext, useState, useMemo } from 'react';
+import React, { createContext, useContext, useState, useMemo, useEffect } from 'react';
 
 const CartContext = createContext(null);
+const CART_STORAGE_KEY = 'campusbite_cart_items';
 
 export const CartProvider = ({ children }) => {
-  const [items, setItems] = useState([]); // [{ menuItemId, name, price, quantity, availableQuantity }]
+  const [items, setItems] = useState(() => {
+    try {
+      const saved = localStorage.getItem(CART_STORAGE_KEY);
+      return saved ? JSON.parse(saved) : [];
+    } catch {
+      return [];
+    }
+  });
+
+  useEffect(() => {
+    try {
+      localStorage.setItem(CART_STORAGE_KEY, JSON.stringify(items));
+    } catch (e) {
+      console.error('Failed to save cart to localStorage', e);
+    }
+  }, [items]);
 
   const addItem = (menuItem) => {
     setItems((prev) => {

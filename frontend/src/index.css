@@ -90,3 +90,53 @@
   background: #a1a1aa;
 }
 
+/* QR Camera Scanner Styling - Fix Mobile Black Bars & Sizing */
+#qr-camera-feed {
+  position: relative !important;
+  border: none !important;
+  overflow: hidden !important;
+  border-radius: 1.5rem !important;
+  background-color: #0f172a !important;
+  box-shadow: 0 4px 20px -2px rgba(0, 0, 0, 0.25) !important;
+}
+
+#qr-camera-feed video {
+  width: 100% !important;
+  height: 100% !important;
+  object-fit: cover !important;
+  border-radius: 1.5rem !important;
+  display: block !important;
+}
+
+#qr-camera-feed canvas {
+  display: none !important;
+}
+
+#qr-camera-feed img[alt="Info icon"] {
+  display: none !important;
+}
+
+#qr-shaded-region {
+  border-color: rgba(234, 88, 12, 0.7) !important;
+  border-radius: 1rem !important;
+}
+
+@keyframes laserSweep {
+  0% { top: 15%; opacity: 0.8; }
+  50% { top: 85%; opacity: 1; }
+  100% { top: 15%; opacity: 0.8; }
+}
+
+.laser-line {
+  position: absolute;
+  left: 12%;
+  right: 12%;
+  height: 2px;
+  background: linear-gradient(90deg, transparent, #ea580c, #fdba74, #ea580c, transparent);
+  box-shadow: 0 0 14px 3px rgba(234, 88, 12, 0.8);
+  animation: laserSweep 2s ease-in-out infinite;
+  pointer-events: none;
+  z-index: 10;
+}
+
+
